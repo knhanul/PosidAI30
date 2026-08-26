@@ -64,7 +64,8 @@ class Settings(BaseSettings):
 
     @property
     def webdav_configured(self) -> bool:
-        return bool(self.webdav_url and self.webdav_username and self.webdav_password)
+        placeholders = {"CHANGE_ME", "CHANGE_TO_WEBDAV_USERNAME", "CHANGE_TO_WEBDAV_PASSWORD"}
+        return bool(self.webdav_url and self.webdav_username and self.webdav_password and self.webdav_username not in placeholders and self.webdav_password not in placeholders)
 
 
 @lru_cache
