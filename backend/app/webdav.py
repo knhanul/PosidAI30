@@ -38,24 +38,36 @@ class WebDAVStorage:
         encoded = "/".join(quote(part, safe="") for part in path.strip("/").split("/") if part)
         return f"{base}/{encoded}" if encoded else base
 
-    def ensure_collection(self, relative_parts: list[str]) -> None:
+    def ensure_collection(self, relative_parts: list[str], client: httpx.Client | None = None) -> None:
         self._require_config()
         current: list[str] = []
         root_parts = [item for item in self.settings.webdav_root.strip("/").split("/") if item]
-        with self._client() as client:
+        own_client = client is None
+        if own_client:
+            client = self._client()
+        try:
             for part in [*root_parts, *relative_parts]:
                 current.append(part)
-                response = client.request("MKCOL", self._url("/".join(current)))
+                url = self._url("/".join(current)) + "/"
+                response = client.request("PROPFIND", url, headers={"Depth": "0"})
+                if response.status_code == 207:
+                    continue
+                response = client.request("MKCOL", url)
                 if response.status_code not in (201, 301, 405):
                     raise HTTPException(status_code=502, detail=f"WebDAV 폴더를 준비하지 못했습니다. ({response.status_code})")
+        finally:
+            if own_client:
+                client.close()
 
     def upload(self, relative_dir: list[str], filename: str, source: BinaryIO) -> str:
-        self.ensure_collection(relative_dir)
+        self._require_config()
         root_parts = [item for item in self.settings.webdav_root.strip("/").split("/") if item]
         storage_path = "/".join([*root_parts, *relative_dir, safe_filename(filename)])
         source.seek(0)
+        content = source.read()
         with self._client() as client:
-            response = client.put(self._url(storage_path), content=source)
+            self.ensure_collection(relative_dir, client=client)
+            response = client.put(self._url(storage_path), content=content)
             if response.status_code not in (200, 201, 204):
                 raise HTTPException(status_code=502, detail=f"WebDAV에 파일을 저장하지 못했습니다. ({response.status_code})")
         return storage_path
