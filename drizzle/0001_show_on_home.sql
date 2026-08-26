@@ -1,0 +1,1 @@
+-- Replaced by the generated 0001_cheerful_tempest.sql migration.

@@ -1,0 +1,11 @@
+.git
+.sites-runtime
+.wrangler
+dist
+node_modules
+npm-debug.log*
+*.zip
+.env
+*.md
+DEPLOY*
+배포*

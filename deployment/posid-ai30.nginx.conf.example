@@ -1,0 +1,18 @@
+server {
+    listen 80;
+    server_name ai.posid.or.kr;
+    client_max_body_size 110m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8091;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
+
+# 운영에서는 Certbot 또는 조직 표준 인증서로 HTTPS를 적용한 뒤
+# HTTP 요청을 HTTPS로 리디렉션하세요. COOKIE_SECURE=true는 HTTPS가 필요합니다.
