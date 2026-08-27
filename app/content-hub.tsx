@@ -40,7 +40,7 @@ export default function ContentHub() {
   const featured = homePosts.find((post) => post.featured) ?? homePosts[0];
   const quickReads = homePosts.filter((post) => post.id !== featured?.id).slice(0, 3);
   const used = new Set([featured?.id, ...quickReads.map((post) => post.id)]);
-  const filteredLatest = homePosts.filter((post) => !used.has(post.id) && (active === "all" || post.category === active) && (!query.trim() || [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(query.trim().toLowerCase())));
+  const filteredLatest = homePosts.filter((post) => (active === "all" || post.category === active) && (!query.trim() || [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(query.trim().toLowerCase())));
   const services = homePosts.filter((post) => post.category === "together" && !used.has(post.id));
 
   return <div className="site-shell">

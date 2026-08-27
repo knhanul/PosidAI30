@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     webdav_timeout_seconds: float = 60.0
     max_thumbnail_mb: int = 10
     max_attachment_mb: int = 100
+    max_project_file_mb: int = 2048
+    local_storage_dir: str = "/app/storage"
 
     @property
     def origins(self) -> list[str]:
@@ -64,6 +66,8 @@ class Settings(BaseSettings):
 
     @property
     def webdav_configured(self) -> bool:
+        if self.environment.lower() in {"development", "dev", "local", "test"}:
+            return False
         placeholders = {"CHANGE_ME", "CHANGE_TO_WEBDAV_USERNAME", "CHANGE_TO_WEBDAV_PASSWORD"}
         return bool(self.webdav_url and self.webdav_username and self.webdav_password and self.webdav_username not in placeholders and self.webdav_password not in placeholders)
 

@@ -1,0 +1,8 @@
+# Shell scripts must keep LF line endings so they run inside Linux containers.
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+
+# Dockerfiles and compose files are consumed by Linux tooling.
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf

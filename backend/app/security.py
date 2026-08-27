@@ -88,6 +88,16 @@ def get_current_session(
     return session
 
 
+def get_optional_session(request: Request, db: Session = Depends(get_db)) -> AdminSession | None:
+    raw_token = request.cookies.get(get_settings().session_cookie_name)
+    if not raw_token:
+        return None
+    session = db.scalar(select(AdminSession).where(AdminSession.token_hash == token_digest(raw_token), AdminSession.expires_at > utcnow()))
+    if not session or not session.user.is_active:
+        return None
+    return session
+
+
 def require_admin(session: AdminSession = Depends(get_current_session)) -> AdminSession:
     if session.user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")

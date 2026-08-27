@@ -17,6 +17,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from .ai_projects_router import router as ai_projects_router
 from .config import get_settings
 from .database import get_db
 from .models import AdminSession, AdminUser, Attachment, AuditLog, AuthIdentity, Bookmark, Comment, OAuthState, Post, PostLike, utcnow
@@ -27,8 +28,9 @@ from .webdav import safe_filename, storage
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, docs_url="/api/docs" if settings.environment != "production" else None, openapi_url="/api/openapi.json" if settings.environment != "production" else None)
+app.include_router(ai_projects_router)
 if settings.origins:
-    app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
+    app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
 
 login_attempts: dict[str, deque[float]] = defaultdict(deque)
 dummy_password_hash = hash_password("not-the-real-password")
@@ -518,6 +520,31 @@ def get_user_post_for_edit(post_id: uuid.UUID, session: AdminSession = Depends(r
     if item.author_id != session.user_id:
         raise HTTPException(status_code=403, detail="자신이 작성한 글만 수정할 수 있습니다.")
     return post_payload(item)
+
+
+@app.post("/api/posts/{post_id}/thumbnail")
+def upload_user_thumbnail(post_id: uuid.UUID, file: UploadFile = File(...), session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
+    item = get_active_post(db, post_id)
+    if item.author_id != session.user_id and session.user.role != "admin":
+        raise HTTPException(status_code=403, detail="이 글의 대표 이미지를 업로드할 권한이 없습니다.")
+    if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=415, detail="대표 이미지는 JPG, PNG, WebP만 사용할 수 있습니다.")
+    assert_upload_size(file, settings.max_thumbnail_mb)
+    filename = f"{secrets.token_hex(8)}-{safe_filename(file.filename or 'thumbnail')}"
+    old_path = item.thumbnail_path
+    path = storage.upload(["posts", str(item.id), "thumbnail"], filename, file.file)
+    item.thumbnail_path = path
+    item.thumbnail_filename = safe_filename(file.filename or "thumbnail")
+    item.thumbnail_content_type = file.content_type
+    item.thumbnail_type = "webdav"
+    add_audit(db, session.user_id, "thumbnail.upload", "post", str(item.id), {"filename": item.thumbnail_filename})
+    db.commit()
+    if old_path and old_path != path:
+        try:
+            storage.delete(old_path)
+        except HTTPException:
+            pass
+    return post_payload(get_active_post(db, item.id))
 
 
 @app.put("/api/posts/{post_id}")

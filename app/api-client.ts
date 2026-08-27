@@ -143,6 +143,56 @@ export async function updatePost(id: string, payload: PostPayload, csrf: string)
 export async function deletePost(id: string, csrf: string) { return apiFetch<void>(`/api/admin/posts/${id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
 export async function uploadThumbnail(id: string, file: File, csrf: string) { const body = new FormData(); body.append("file", file); return apiFetch<ApiPost>(`/api/admin/posts/${id}/thumbnail`, { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
 export async function uploadInlineImage(id: string, file: File, csrf: string) { const body = new FormData(); body.append("file", file); return apiFetch<{ url: string }>(`/api/posts/${id}/inline-images`, { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
+export async function uploadPublicThumbnail(id: string, file: File, csrf: string) { const body = new FormData(); body.append("file", file); return apiFetch<ApiPost>(`/api/posts/${id}/thumbnail`, { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
 export async function uploadNewPostInlineImage(file: File, csrf: string) { const body = new FormData(); body.append("file", file); return apiFetch<{ url: string }>("/api/inline-images", { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
 export async function uploadAttachments(id: string, files: File[], csrf: string) { const body = new FormData(); files.forEach((file) => body.append("files", file)); return apiFetch<ApiAttachment[]>(`/api/admin/posts/${id}/attachments`, { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
 export async function deleteAttachment(id: string, csrf: string) { return apiFetch<void>(`/api/admin/attachments/${id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
+
+export type AiProjectFile = { id: string; kind: string; category: string | null; folder: string | null; title: string; description: string; filename: string; content_type: string; size: number; sha256: string; is_primary: boolean; download_count: number; download_url: string; deleted_at: string | null; created_at: string };
+export type AiProjectRelease = { id: string; version: string; title: string; notes: string; release_date: string | null; is_latest: boolean; is_prerelease: boolean; download_count: number; created_at: string; files: AiProjectFile[] };
+export type AiProjectResource = AiProjectFile;
+export type AiProjectLink = { id?: string; label: string; url: string; link_type?: string; type?: string; position?: number };
+export type AiProjectVisibility = "public" | "private" | "unlisted";
+export type AiProject = {
+  id: string; slug: string; owner_id: number; name: string; summary: string; description: string; website_url: string | null;
+  project_type: string; visibility: AiProjectVisibility; categories: string[]; platforms: string[];
+  icon_url: string | null; readme_markdown?: string; readme_html?: string; readme_download_url: string | null;
+  created_at: string; updated_at: string; view_count: number; download_count: number; latest_release: AiProjectRelease | null;
+  links?: AiProjectLink[]; resource_category_counts: Record<string, number>; resource_folders: string[];
+  releases?: AiProjectRelease[]; resources?: AiProjectResource[];
+  owned_by_current_user: boolean; is_admin: boolean; can_manage: boolean;
+};
+export type AiProjectListResponse = { items: AiProject[]; page: number; page_size: number; total: number; total_pages: number; types: string[]; platforms: string[]; can_create: boolean };
+export type AiProjectPayload = { name: string; summary: string; description: string; website_url: string | null; project_type: string; visibility: AiProjectVisibility; categories: string[]; platforms: string[]; links: AiProjectLink[]; readme_markdown: string };
+export type AiProjectFolderEntry = { name: string; path: string; is_dir: boolean; size: number | null; content_type: string | null };
+export type UploadOptions = { onProgress?: (percent: number) => void; signal?: AbortSignal };
+
+function xhrMultipart<T>(path: string, body: FormData, csrf: string, options: UploadOptions = {}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path); xhr.withCredentials = true; xhr.setRequestHeader("Accept", "application/json"); xhr.setRequestHeader("X-CSRF-Token", csrf);
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) options.onProgress?.(Math.round(event.loaded / event.total * 100)); };
+    xhr.onerror = () => reject(new Error("네트워크 오류로 업로드하지 못했습니다."));
+    xhr.onabort = () => reject(new DOMException("업로드가 취소되었습니다.", "AbortError"));
+    xhr.onload = () => { let payload: (T & { detail?: unknown }) | undefined; try { payload = xhr.responseText ? JSON.parse(xhr.responseText) as T & { detail?: unknown } : undefined; } catch { payload = undefined; } if (xhr.status >= 200 && xhr.status < 300) { options.onProgress?.(100); resolve(payload as T); return; } const detail = payload?.detail; reject(new Error(typeof detail === "string" ? detail : `업로드를 처리하지 못했습니다. (${xhr.status})`)); };
+    const abort = () => xhr.abort(); options.signal?.addEventListener("abort", abort, { once: true }); xhr.onloadend = () => options.signal?.removeEventListener("abort", abort); xhr.send(body);
+  });
+}
+
+export async function listAiProjects(params: { q?: string; type?: string; platform?: string; sort?: string; page?: number; pageSize?: number } = {}) { const query = new URLSearchParams(); if (params.q) query.set("q", params.q); if (params.type) query.set("type", params.type); if (params.platform) query.set("platform", params.platform); if (params.sort) query.set("sort", params.sort); if (params.page) query.set("page", String(params.page)); if (params.pageSize) query.set("page_size", String(params.pageSize)); return apiFetch<AiProjectListResponse>(`/api/ai-projects${query.size ? `?${query}` : ""}`); }
+export async function getAiProject(slug: string) { return apiFetch<AiProject>(`/api/ai-projects/${encodeURIComponent(slug)}`); }
+export async function createAiProject(payload: AiProjectPayload, csrf: string) { return apiFetch<AiProject>("/api/ai-projects", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) }); }
+export async function updateAiProject(slug: string, payload: AiProjectPayload, csrf: string) { return apiFetch<AiProject>(`/api/ai-projects/${encodeURIComponent(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) }); }
+export async function deleteAiProject(slug: string, csrf: string) { return apiFetch<void>(`/api/ai-projects/${encodeURIComponent(slug)}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
+export async function uploadAiProjectIcon(slug: string, file: File, csrf: string) { const body = new FormData(); body.append("file", file); return apiFetch<AiProject>(`/api/ai-projects/${encodeURIComponent(slug)}/icon`, { method: "POST", headers: { "X-CSRF-Token": csrf }, body }); }
+export async function updateAiProjectReadme(slug: string, markdown: string, csrf: string) { return apiFetch<AiProject>(`/api/ai-projects/${encodeURIComponent(slug)}/readme`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ markdown }) }); }
+export async function createAiProjectRelease(slug: string, values: { version: string; title: string; release_date: string; notes: string; is_latest: boolean; is_prerelease: boolean; primary_file_index: number; files: File[] }, csrf: string, options?: UploadOptions) { const body = new FormData(); body.append("version", values.version); body.append("title", values.title); if (values.release_date) body.append("release_date", values.release_date); body.append("notes", values.notes); body.append("is_latest", String(values.is_latest)); body.append("is_prerelease", String(values.is_prerelease)); body.append("primary_file_index", String(values.primary_file_index)); values.files.forEach((file) => body.append("files", file)); return xhrMultipart<AiProjectRelease>(`/api/ai-projects/${encodeURIComponent(slug)}/releases`, body, csrf, options); }
+export async function uploadAiProjectResources(slug: string, values: { category: string; title: string; description: string; folder: string; files: File[] }, csrf: string, options?: UploadOptions) { const body = new FormData(); body.append("category", values.category); body.append("title", values.title); body.append("description", values.description); body.append("folder", values.folder); values.files.forEach((file) => body.append("files", file)); return xhrMultipart<AiProjectResource[]>(`/api/ai-projects/${encodeURIComponent(slug)}/resources`, body, csrf, options); }
+export async function deleteAiProjectRelease(slug: string, releaseId: string, csrf: string) { return apiFetch<void>(`/api/ai-projects/${encodeURIComponent(slug)}/releases/${encodeURIComponent(releaseId)}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
+export async function deleteAiProjectResource(slug: string, resourceId: string, csrf: string) { return apiFetch<void>(`/api/ai-projects/${encodeURIComponent(slug)}/resources/${encodeURIComponent(resourceId)}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
+export async function updateAiProjectResource(slug: string, resourceId: string, payload: { title?: string; description?: string; category?: string; folder?: string; filename?: string }, csrf: string) { return apiFetch<AiProjectResource>(`/api/ai-projects/${encodeURIComponent(slug)}/resources/${encodeURIComponent(resourceId)}`, { method: "PATCH", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) }); }
+export async function createAiProjectFolder(slug: string, path: string, csrf: string) { return apiFetch<{ path: string }>(`/api/ai-projects/${encodeURIComponent(slug)}/folders`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ path }) }); }
+export async function listAiProjectFolder(slug: string, path = "") { const query = new URLSearchParams(); if (path) query.set("path", path); return apiFetch<AiProjectFolderEntry[]>(`/api/ai-projects/${encodeURIComponent(slug)}/folders${query.size ? `?${query}` : ""}`); }
+export async function moveAiProjectFolder(slug: string, source: string, destination: string, csrf: string) { return apiFetch<{ path: string }>(`/api/ai-projects/${encodeURIComponent(slug)}/folders/move`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ source, destination }) }); }
+export async function listAiProjectTrash(slug: string) { return apiFetch<{ items: AiProjectResource[] }>(`/api/ai-projects/${encodeURIComponent(slug)}/trash`); }
+export async function restoreAiProjectResource(slug: string, resourceId: string, csrf: string) { return apiFetch<AiProjectResource>(`/api/ai-projects/${encodeURIComponent(slug)}/trash/${encodeURIComponent(resourceId)}/restore`, { method: "POST", headers: { "X-CSRF-Token": csrf } }); }

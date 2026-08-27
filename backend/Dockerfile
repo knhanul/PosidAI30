@@ -11,7 +11,7 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 COPY entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh && useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh && useradd --create-home --uid 10001 appuser && mkdir -p /app/storage && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]

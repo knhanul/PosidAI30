@@ -50,7 +50,8 @@ Copy-Item .env.sample .env
 | `WEBDAV_VERIFY_TLS` | TLS 검증 여부 | `true` |
 | `WEBDAV_TIMEOUT_SECONDS` | WebDAV 타임아웃 | `60` |
 | `MAX_THUMBNAIL_MB` | 대표 이미지 최대 크기 | `10` |
-| `MAX_ATTACHMENT_MB` | 첨부파일 최대 크기 | `100` |
+| `MAX_ATTACHMENT_MB` | 게시글 첨부파일 최대 크기 | `100` |
+| `MAX_PROJECT_FILE_MB` | 함께 만든 AI 프로젝트 파일 최대 크기 | `2048` |
 
 > **주의**:
 > - 운영 배포 전 `POSTGRES_PASSWORD`, `INITIAL_ADMIN_PASSWORD`, `WEBDAV_USERNAME`, `WEBDAV_PASSWORD`를 반드시 변경하세요.
@@ -123,6 +124,40 @@ docker compose -f deployment/docker-compose.example.yml --env-file .env down
 ```powershell
 docker compose -f deployment/docker-compose.example.yml --env-file .env down -v
 ```
+
+### 3.6 함께 만든 AI 저장소와 migration
+
+운영환경에서는 프로젝트 파일을 PostgreSQL이나 Docker 볼륨이 아닌 WebDAV의 전용 namespace에 저장합니다.
+
+```text
+{WEBDAV_ROOT}/together-ai/projects/{project_uuid}/
+{WEBDAV_ROOT}/together-ai/trash/
+```
+
+`WEBDAV_URL`에 이미 포함된 경로는 다시 결합하지 않습니다. `ENVIRONMENT=development`에서는 개발 편의를 위해 `/app/storage` 로컬 저장소를 사용하며, 운영 배포 전 반드시 `ENVIRONMENT=production`과 실제 `WEBDAV_*` 연결을 확인해야 합니다.
+
+새 migration 적용 전 백업:
+
+```bash
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T db \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+  | gzip > "posid-ai30-before-together-ai-$(date +%Y%m%d-%H%M%S).sql.gz"
+```
+
+현재 migration 확인:
+
+```bash
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend alembic current
+```
+
+`0010_together_ai_repository` rollback은 새 프로젝트 테이블을 제거하므로, 해당 기능에 데이터가 없는 경우에만 다음 명령을 사용합니다.
+
+```bash
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend alembic downgrade 0009_add_content_format
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend alembic upgrade head
+```
+
+정합성 점검은 DB의 활성 파일 경로와 WebDAV 파일 존재 여부를 비교합니다. 누락 경로는 `ai_file_events`의 `operation`, `status`, `source_path`, `destination_path`, `detail`과 함께 확인합니다. 운영 WebDAV 검증은 기존 Repository와 분리된 `together-ai` namespace에서만 수행합니다.
 
 ## 4. 서버 배포 (운영)
 

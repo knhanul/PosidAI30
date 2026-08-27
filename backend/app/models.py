@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -142,6 +142,122 @@ class Attachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     post: Mapped[Post] = relationship(back_populates="attachments")
+
+
+class AIProject(Base):
+    __tablename__ = "ai_projects"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id"), index=True)
+    slug: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), index=True)
+    summary: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    website_url: Mapped[str | None] = mapped_column(Text)
+    project_type: Mapped[str] = mapped_column(String(40), index=True)
+    visibility: Mapped[str] = mapped_column(String(20), default="private", nullable=False, index=True)
+    categories: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    platforms: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    icon_file_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    readme_file_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    readme_markdown: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    view_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    download_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    deleted_by_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    trash_path: Mapped[str | None] = mapped_column(Text)
+
+    owner: Mapped[AdminUser] = relationship(foreign_keys=[owner_id])
+    releases: Mapped[list["AIRelease"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    files: Mapped[list["AIProjectFile"]] = relationship(back_populates="project", cascade="all, delete-orphan", foreign_keys="AIProjectFile.project_id")
+    links: Mapped[list["AIProjectLink"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+
+
+class AIRelease(Base):
+    __tablename__ = "ai_releases"
+    __table_args__ = (
+        UniqueConstraint("project_id", "version", name="uq_ai_release_project_version"),
+        Index("uq_ai_releases_active_latest", "project_id", unique=True, postgresql_where=text("is_latest AND deleted_at IS NULL")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_projects.id", ondelete="CASCADE"), index=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id"))
+    version: Mapped[str] = mapped_column(String(100))
+    title: Mapped[str] = mapped_column(String(180), default="", nullable=False)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    release_date: Mapped[date | None] = mapped_column(Date)
+    is_latest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_prerelease: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    download_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    deleted_by_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    trash_path: Mapped[str | None] = mapped_column(Text)
+
+    project: Mapped[AIProject] = relationship(back_populates="releases")
+    files: Mapped[list["AIProjectFile"]] = relationship(back_populates="release", foreign_keys="AIProjectFile.release_id")
+
+
+class AIProjectFile(Base):
+    __tablename__ = "ai_project_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_projects.id", ondelete="CASCADE"), index=True)
+    release_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ai_releases.id", ondelete="CASCADE"), nullable=True, index=True)
+    uploaded_by_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id"))
+    file_kind: Mapped[str] = mapped_column(String(20), index=True)
+    category: Mapped[str | None] = mapped_column(String(80), index=True)
+    folder: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    title: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    storage_path: Mapped[str] = mapped_column(Text, unique=True)
+    content_type: Mapped[str] = mapped_column(String(160), default="application/octet-stream", nullable=False)
+    size: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    download_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    deleted_by_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    trash_path: Mapped[str | None] = mapped_column(Text)
+
+    project: Mapped[AIProject] = relationship(back_populates="files", foreign_keys=[project_id])
+    release: Mapped[AIRelease | None] = relationship(back_populates="files", foreign_keys=[release_id])
+
+
+class AIProjectLink(Base):
+    __tablename__ = "ai_project_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_projects.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(100))
+    url: Mapped[str] = mapped_column(Text)
+    link_type: Mapped[str] = mapped_column(String(40), default="other", nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    project: Mapped[AIProject] = relationship(back_populates="links")
+
+
+class AIFileEvent(Base):
+    __tablename__ = "ai_file_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ai_projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ai_project_files.id", ondelete="SET NULL"), nullable=True, index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    operation: Mapped[str] = mapped_column(String(50), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    source_path: Mapped[str | None] = mapped_column(Text)
+    destination_path: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
 
 class AuditLog(Base):
