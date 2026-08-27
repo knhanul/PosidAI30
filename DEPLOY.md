@@ -342,6 +342,30 @@ ports:
 
 또는 기존 리버스 프록시(Nginx/Caddy)를 앞에 두고 `127.0.0.1:8091`로 프록시합니다.
 
+프로젝트 파일은 최대 `MAX_PROJECT_FILE_MB=2048`까지 허용하므로 외부 Nginx와 내부 gateway의 제한을 모두 맞춰야 합니다. 외부 Nginx의 HTTPS `server` 블록에도 다음 설정을 적용하세요.
+
+```nginx
+client_max_body_size 2050m;
+
+location / {
+    proxy_pass http://127.0.0.1:8091;
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}
+```
+
+적용 전후 검증:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+sudo nginx -T | grep -E 'server_name|client_max_body_size'
+```
+
+`413 Request Entity Too Large`가 계속되면 실제 요청을 처리하는 HTTPS `server_name` 블록에 설정이 들어갔는지 확인해야 합니다. HTTP 블록이나 사용되지 않는 예제 파일만 수정하면 운영 요청에는 반영되지 않습니다.
+
 ## 7. 운영 명령 요약
 
 ```bash

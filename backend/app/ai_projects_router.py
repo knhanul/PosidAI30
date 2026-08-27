@@ -394,8 +394,11 @@ def list_folder(identifier: str, path: str = "", session: AdminSession | None = 
     project = get_project(db, identifier)
     can_view(project, session)
     relative = safe_subpath(path)
+    folder_path = f"{project_root(project.id)}/resources/{relative}".rstrip("/")
+    if not storage.exists(folder_path):
+        return []
     try:
-        return [{"name": item.name, "path": item.path, "is_dir": item.is_dir, "size": item.size, "content_type": item.content_type} for item in storage.list(f"{project_root(project.id)}/resources/{relative}".rstrip("/"))]
+        return [{"name": item.name, "path": item.path, "is_dir": item.is_dir, "size": item.size, "content_type": item.content_type} for item in storage.list(folder_path)]
     except StorageError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
