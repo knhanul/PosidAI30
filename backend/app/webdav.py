@@ -215,9 +215,17 @@ class WebDAVStorage(StorageBase):
     def write_stream(self, path: str, source: BinaryIO, content_type: str | None = None) -> None:
         self._require_config()
         source.seek(0)
-        chunks = iter(lambda: source.read(1024 * 1024), b"")
+        try:
+            source.seek(0, 2)
+            size = source.tell()
+            source.seek(0)
+        except Exception:
+            size = None
+        headers = {"Content-Type": content_type or "application/octet-stream"}
+        if size is not None:
+            headers["Content-Length"] = str(size)
         with self._client() as client:
-            response = client.put(self._url(path), content=chunks, headers={"Content-Type": content_type or "application/octet-stream"})
+            response = client.put(self._url(path), content=source, headers=headers)
         self._check(response, (200, 201, 204))
 
     def move(self, source: str, destination: str, overwrite: bool = False) -> None:
