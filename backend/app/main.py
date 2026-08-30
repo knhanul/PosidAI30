@@ -166,7 +166,7 @@ def kakao_login(request: Request, db: Session = Depends(get_db)) -> Response:
     prompt = requested_prompt if requested_prompt in {"select_account", "login"} else "select_account"
     state_value = f"{secrets.token_urlsafe(32)}.{intent}.{user_id or 0}.{prompt}"
     state = f"{state_value}.{kakao_state_signature(state_value)}"
-    params = "&".join((f"client_id={quote(settings.kakao_rest_api_key)}", "redirect_uri=" + quote(settings.kakao_callback_uri, safe=""), "response_type=code", f"state={quote(state, safe='')}", f"prompt={prompt}", "scope=account_email"))
+    params = "&".join((f"client_id={quote(settings.kakao_rest_api_key)}", "redirect_uri=" + quote(settings.kakao_callback_uri, safe=""), "response_type=code", f"state={quote(state, safe='')}", f"prompt={prompt}"))
     db.add(OAuthState(state_hash=hashlib.sha256(state.encode()).hexdigest(), intent=intent, user_id=user_id, expires_at=utcnow() + timedelta(minutes=10)))
     db.commit()
     response = RedirectResponse(f"https://kauth.kakao.com/oauth/authorize?{params}", status_code=307)
