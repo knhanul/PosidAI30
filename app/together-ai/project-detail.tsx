@@ -24,7 +24,7 @@ export default function TogetherProjectDetail({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const authReloaded = useRef(false);
-  const load = useCallback(() => { setLoading(true); setError(""); getAiProject(slug).then(setProject).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)); }, [slug]);
+  const load = useCallback(() => { setLoading(true); setError(""); getAiProject(slug).then(setProject).catch((reason: Error) => setError(reason.message.includes("로그인") ? "로그인이 필요합니다." : reason.message)).finally(() => setLoading(false)); }, [slug]);
   const handleAuth = useCallback((next: AuthState | null) => {
     setAuth(next);
     if (next && !authReloaded.current) {
@@ -84,5 +84,5 @@ function Settings({ project, auth, refresh }: { project: AiProject; auth: AuthSt
 
 function UploadProgress({ busy, progress, onCancel }: { busy: boolean; progress: number; onCancel: () => void }) { if (!busy) return null; return <div className="upload-progress" role="status"><div><span style={{ width: `${progress}%` }} /></div><strong>{progress}%</strong><button type="button" onClick={onCancel}>업로드 취소</button></div>; }
 function ConfirmDialog({ open, title, detail, confirmLabel, onCancel, onConfirm }: { open: boolean; title: string; detail: string; confirmLabel: string; onCancel: () => void; onConfirm: () => void }) { if (!open) return null; return <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div className="confirm-card"><h2 id="confirm-title">{title}</h2><p>{detail}</p><div><button onClick={onCancel}>취소</button><button className="confirm-danger" onClick={onConfirm}>{confirmLabel}</button></div></div></div>; }
-function DetailStatus({ title, detail, action }: { title: string; detail?: string; action?: () => void }) { return <div className="together-status detail-status"><strong>{title}</strong>{detail && <p>{detail}</p>}{action && <button onClick={action}>다시 시도</button>}</div>; }
+function DetailStatus({ title, detail, action }: { title: string; detail?: string; action?: () => void }) { return <div className="together-status detail-status"><strong>{title}</strong>{detail && <p>{detail}</p>}{title === "로그인이 필요합니다." ? <a className="together-primary" href="/api/auth/kakao/login">카카오로 로그인하기</a> : action && <button onClick={action}>다시 시도</button>}</div>; }
 function parseLinks(value: string) { const result = []; for (const line of value.split("\n").map((item) => item.trim()).filter(Boolean)) { const [label, url, linkType = "other"] = line.split("|").map((item) => item.trim()); try { const parsed = new URL(url); if (!label || !["http:", "https:"].includes(parsed.protocol)) return null; result.push({ label, url: parsed.toString(), link_type: linkType || "other", position: result.length }); } catch { return null; } } return result; }

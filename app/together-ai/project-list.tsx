@@ -30,7 +30,7 @@ export default function TogetherProjectList() {
   const load = useCallback(() => {
     setLoading(true); setError("");
     listAiProjects({ q: search, type, platform, sort, page, pageSize: 12 })
-      .then(setData).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
+      .then(setData).catch((reason: Error) => setError(reason.message.includes("로그인") ? "로그인이 필요합니다." : reason.message)).finally(() => setLoading(false));
   }, [search, type, platform, sort, page]);
   useEffect(() => { const timer = window.setTimeout(load, 0); return () => window.clearTimeout(timer); }, [load]);
 
@@ -73,4 +73,4 @@ function ProjectCard({ project }: { project: AiProject }) {
   const latestHref = `/api/ai-projects/${encodeURIComponent(project.slug)}/download/latest`;
   return <article className="project-card"><Link href={`/together-ai/${project.slug}`} className="project-card-main"><div className="project-icon">{project.icon_url ? <img src={project.icon_url} alt="" /> : <SiteIcon name="cube" size={28} />}</div><div className="project-tags"><span>{project.project_type}</span>{project.platforms.slice(0, 2).map((item) => <span key={item}>{item}</span>)}</div><h2>{project.name}</h2><p>{project.summary}</p></Link><div className="project-latest"><div><small>최신 버전</small><strong>{project.latest_release?.version ?? "릴리스 준비 중"}</strong><span>{formatDate(project.latest_release?.release_date)}{primary ? ` · ${formatSize(primary.size)}` : ""}</span></div>{primary ? <a className="together-primary small" href={latestHref} download>최신 다운로드</a> : <span className="together-disabled" title="최신 릴리스에 기본 파일이 없습니다.">다운로드 없음</span>}</div><div className="project-stats"><span>조회 {project.view_count.toLocaleString()}</span><span>다운로드 {project.download_count.toLocaleString()}</span></div></article>;
 }
-function Status({ title, detail, action, busy }: { title: string; detail: string; action?: () => void; busy?: boolean }) { return <div className="together-status" aria-live="polite">{busy && <span className="loading-dot" />}<strong>{title}</strong><p>{detail}</p>{action && <button onClick={action}>다시 시도</button>}</div>; }
+function Status({ title, detail, action, busy }: { title: string; detail: string; action?: () => void; busy?: boolean }) { return <div className="together-status" aria-live="polite">{busy && <span className="loading-dot" />}<strong>{title}</strong><p>{detail}</p>{title === "로그인이 필요합니다." ? <a className="together-primary" href="/api/auth/kakao/login">카카오로 로그인하기</a> : action && <button onClick={action}>다시 시도</button>}</div>; }

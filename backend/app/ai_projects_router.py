@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from .ai_projects_service import ensure_latest, event, file_payload, get_project, project_payload, project_root, release_payload, render_markdown, replace_path_prefix, require_owner, safe_subpath, set_latest, trash_move, unique_slug, upload_file
 from .database import get_db
 from .models import AIProject, AIProjectFile, AIProjectLink, AIRelease, AdminSession, utcnow
-from .security import get_current_session, get_optional_session, require_admin, require_admin_csrf, require_confirmed_csrf as require_csrf
+from .security import get_current_session, require_admin, require_admin_csrf, require_confirmed_csrf as require_csrf
 from .webdav import StorageError, safe_filename, storage
 
 router = APIRouter(prefix="/api/ai-projects", tags=["ai-projects"])
@@ -123,7 +123,7 @@ def store_readme(db: Session, project: AIProject, markdown: str, actor_id: int) 
 
 
 @router.get("")
-def list_projects(q: str = "", type_filter: str | None = Query(None, alias="type"), project_type: str | None = None, platform: str | None = None, sort: Literal["latest", "newest", "updated", "name", "downloads", "views"] = "latest", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
+def list_projects(q: str = "", type_filter: str | None = Query(None, alias="type"), project_type: str | None = None, platform: str | None = None, sort: Literal["latest", "newest", "updated", "name", "downloads", "views"] = "latest", page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
     access_filter = AIProject.visibility == "public"
     if session:
         access_filter = or_(AIProject.visibility.in_(["public", "unlisted"]), AIProject.owner_id == session.user_id) if session.user.role != "admin" else AIProject.id.is_not(None)
@@ -168,7 +168,7 @@ def create_project(data: ProjectInput, session: AdminSession = Depends(require_c
 
 
 @router.get("/{identifier}")
-def project_detail(identifier: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
+def project_detail(identifier: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
     project = get_project(db, identifier)
     can_view(project, session)
     db.execute(update(AIProject).where(AIProject.id == project.id).values(view_count=AIProject.view_count + 1))
@@ -210,7 +210,7 @@ def upload_icon(identifier: str, file: UploadFile = File(...), session: AdminSes
 
 
 @router.get("/{identifier}/icon")
-def get_icon(identifier: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def get_icon(identifier: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     project = get_project(db, identifier)
     can_view(project, session)
     item = db.get(AIProjectFile, project.icon_file_id) if project.icon_file_id else None
@@ -241,7 +241,7 @@ def upload_readme(identifier: str, file: UploadFile = File(...), session: AdminS
 
 
 @router.get("/{identifier}/readme/download")
-def download_readme(identifier: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def download_readme(identifier: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     project = get_project(db, identifier)
     can_view(project, session)
     item = db.get(AIProjectFile, project.readme_file_id) if project.readme_file_id else None
@@ -390,7 +390,7 @@ def create_folder(identifier: str, data: FolderInput, session: AdminSession = De
 
 
 @router.get("/{identifier}/folders")
-def list_folder(identifier: str, path: str = "", session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> list[dict]:
+def list_folder(identifier: str, path: str = "", session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> list[dict]:
     project = get_project(db, identifier)
     can_view(project, session)
     relative = safe_subpath(path)
@@ -427,7 +427,7 @@ def move_folder(identifier: str, data: MoveInput, session: AdminSession = Depend
 
 
 @router.get("/{identifier}/files/{file_id}/download")
-def download_file(identifier: str, file_id: uuid.UUID, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def download_file(identifier: str, file_id: uuid.UUID, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     project = get_project(db, identifier)
     can_view(project, session)
     item = db.scalar(select(AIProjectFile).where(AIProjectFile.id == file_id, AIProjectFile.project_id == project.id, AIProjectFile.deleted_at.is_(None)))
@@ -443,7 +443,7 @@ def download_file(identifier: str, file_id: uuid.UUID, session: AdminSession | N
 
 
 @router.get("/{identifier}/download/latest")
-def download_latest(identifier: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def download_latest(identifier: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     project = get_project(db, identifier)
     can_view(project, session)
     item = db.scalar(select(AIProjectFile).join(AIRelease, AIProjectFile.release_id == AIRelease.id).where(AIRelease.project_id == project.id, AIRelease.is_latest.is_(True), AIRelease.deleted_at.is_(None), AIProjectFile.is_primary.is_(True), AIProjectFile.deleted_at.is_(None)))
