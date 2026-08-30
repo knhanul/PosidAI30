@@ -166,7 +166,7 @@ def kakao_login(request: Request, db: Session = Depends(get_db)) -> Response:
     prompt = requested_prompt if requested_prompt in {"select_account", "login"} else "select_account"
     state_value = f"{secrets.token_urlsafe(32)}.{intent}.{user_id or 0}.{prompt}"
     state = f"{state_value}.{kakao_state_signature(state_value)}"
-    params = "&".join((f"client_id={quote(settings.kakao_rest_api_key)}", "redirect_uri=" + quote(settings.kakao_callback_uri, safe=""), "response_type=code", f"state={quote(state, safe='')}", f"prompt={prompt}"))
+    params = "&".join((f"client_id={quote(settings.kakao_rest_api_key)}", "redirect_uri=" + quote(settings.kakao_callback_uri, safe=""), "response_type=code", f"state={quote(state, safe='')}", f"prompt={prompt}", "scope=account_email"))
     db.add(OAuthState(state_hash=hashlib.sha256(state.encode()).hexdigest(), intent=intent, user_id=user_id, expires_at=utcnow() + timedelta(minutes=10)))
     db.commit()
     response = RedirectResponse(f"https://kauth.kakao.com/oauth/authorize?{params}", status_code=307)
@@ -220,6 +220,10 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
     properties = kakao_user.get("properties") or {}
     kakao_nickname = properties.get("nickname") if isinstance(properties.get("nickname"), str) else None
     profile_image = properties.get("profile_image") if isinstance(properties.get("profile_image"), str) else None
+    kakao_account = kakao_user.get("kakao_account") or {}
+    kakao_email = kakao_account.get("email") if isinstance(kakao_account.get("email"), str) else None
+    admin_emails = {item.strip().lower() for item in settings.kakao_admin_emails.split(",") if item.strip()}
+    is_admin_email = bool(kakao_email and kakao_email.lower() in admin_emails)
     identity = db.scalar(select(AuthIdentity).where(AuthIdentity.provider == "kakao", AuthIdentity.provider_subject == subject))
     if intent == "link":
         try:
@@ -242,7 +246,7 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
     if not identity:
         if intent != "login":
             return kakao_error("/admin/login", "not_linked")
-        user = AdminUser(username=f"kakao_{subject}", display_name="Kakao 사용자", display_name_confirmed=False, password_hash=hash_password(secrets.token_urlsafe(32)), role="user")
+        user = AdminUser(username=f"kakao_{subject}", display_name="Kakao 사용자", display_name_confirmed=False, password_hash=hash_password(secrets.token_urlsafe(32)), role="admin" if is_admin_email else "user")
         db.add(user); db.flush()
         identity = AuthIdentity(user_id=user.id, provider="kakao", provider_subject=subject, provider_nickname=kakao_nickname, profile_image_url=profile_image, last_login_at=utcnow())
         db.add(identity); db.commit()
@@ -251,6 +255,10 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
         identity.profile_image_url = profile_image
         identity.last_login_at = utcnow()
         identity.updated_at = utcnow()
+        if is_admin_email:
+            account = db.get(AdminUser, identity.user_id)
+            if account and account.role != "admin":
+                account.role = "admin"
         db.commit()
     session, raw_token = create_session(db, identity.user_id, persistent=True)
     account = db.get(AdminUser, identity.user_id)
@@ -591,6 +599,25 @@ def delete_post(post_id: uuid.UUID, _: AdminSession = Depends(require_admin_csrf
     item.deleted_at = utcnow()
     item.is_featured = False
     add_audit(db, _.user_id, "post.soft_delete", "post", str(item.id))
+    db.commit()
+
+
+@app.put("/api/admin/posts/{post_id}/featured")
+def set_featured(post_id: uuid.UUID, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> dict:
+    item = get_active_post(db, post_id)
+    item.show_on_home = True
+    item.is_featured = True
+    ensure_featured_unique(db, item)
+    add_audit(db, session.user_id, "post.featured", "post", str(item.id))
+    db.commit()
+    return post_payload(get_active_post(db, item.id), admin=True)
+
+
+@app.delete("/api/admin/posts/{post_id}/featured", status_code=204)
+def unset_featured(post_id: uuid.UUID, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> None:
+    item = get_active_post(db, post_id)
+    item.is_featured = False
+    add_audit(db, session.user_id, "post.unfeatured", "post", str(item.id))
     db.commit()
 
 

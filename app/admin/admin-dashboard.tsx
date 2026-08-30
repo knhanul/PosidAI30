@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
-  createPost, deleteAttachment, deletePost, getMe, listAdminPosts, logout, updatePost,
+  createPost, deleteAttachment, deletePost, getMe, listAdminPosts, logout, setFeatured, unsetFeatured, updatePost,
   uploadAttachments, uploadThumbnail, uploadInlineImage, uploadNewPostInlineImage, unlinkKakao, type AdminUser, type ApiPost, type PostPayload,
 } from "../api-client";
 import { categories, type CategorySlug } from "../content";
@@ -77,6 +77,17 @@ export default function AdminDashboard() {
     finally { setBusy(false); }
   }
 
+  async function toggleFeatured(post: ApiPost) {
+    setBusy(true); setError("");
+    try {
+      if (post.is_featured) { await unsetFeatured(post.id, csrf); }
+      else { await setFeatured(post.id, csrf); }
+      await reload();
+      setMessage(post.is_featured ? "대문 글을 해제했습니다." : "대문 글로 지정했습니다.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "대문 설정을 변경하지 못했습니다."); }
+    finally { setBusy(false); }
+  }
+
   async function removeAttachment(id: string) {
     if (!confirm("첨부파일 원본도 WebDAV에서 삭제됩니다. 계속하시겠습니까?")) return;
     setBusy(true);
@@ -107,7 +118,7 @@ export default function AdminDashboard() {
           {message && <div className="admin-alert success">{message}<button onClick={() => setMessage("")}>닫기</button></div>}
           {!editor ? (
             <section className="admin-list-panel"><div className="admin-panel-title"><div><span>POSTS</span><h2>전체 글</h2></div><button className="admin-primary" onClick={startNew}>새 글 작성</button></div>
-              <div className="admin-post-table"><div className="admin-table-head"><span>글</span><span>홈 노출</span><span>수정일</span><span>관리</span></div>{posts.map((post) => <article key={post.id}><div><span>{categories[post.category].label}</span><strong>{post.title}</strong><small>/{post.slug}</small></div><b className={`status-chip ${post.show_on_home ? "published" : "draft"}`}>{post.is_featured ? "대표 글" : post.show_on_home ? "홈 표시" : "홈 미표시"}</b><time>{new Date(post.updated_at).toLocaleDateString("ko-KR")}</time><div><button onClick={() => startEdit(post)}>수정</button><button className="danger" onClick={() => remove(post)}>삭제</button></div></article>)}</div>
+              <div className="admin-post-table"><div className="admin-table-head"><span>글</span><span>홈 노출</span><span>수정일</span><span>관리</span></div>{posts.map((post) => <article key={post.id}><div><span>{categories[post.category].label}</span><strong>{post.title}</strong><small>/{post.slug}</small></div><b className={`status-chip ${post.show_on_home ? "published" : "draft"}`}>{post.is_featured ? "대문 글" : post.show_on_home ? "홈 표시" : "홈 미표시"}</b><time>{new Date(post.updated_at).toLocaleDateString("ko-KR")}</time><div><button onClick={() => startEdit(post)}>수정</button><button className={post.is_featured ? "danger" : ""} disabled={busy} onClick={() => toggleFeatured(post)}>{post.is_featured ? "대문 해제" : "대문 지정"}</button><button className="danger" onClick={() => remove(post)}>삭제</button></div></article>)}</div>
               {!posts.length && <div className="empty-state"><strong>작성된 글이 없습니다.</strong><p>새 글 작성 버튼으로 첫 글을 등록해 보세요.</p></div>}
             </section>
           ) : (
