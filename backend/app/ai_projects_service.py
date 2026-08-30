@@ -108,8 +108,9 @@ def upload_file(db: Session, project: AIProject, actor_id: int, upload: UploadFi
     spool, size, digest = hash_and_spool(upload.file, get_settings().max_project_file_mb * 1024 * 1024)
     path = safe_subpath(f"{directory}/{uuid.uuid4().hex[:12]}-{original}")
     try:
-        storage.ensure_collection(path.rsplit("/", 1)[0].split("/"))
-        storage.write_stream(path, spool, upload.content_type)
+        with storage._client() as client:
+            storage.ensure_collection(path.rsplit("/", 1)[0].split("/"), client)
+            storage.write_stream(path, spool, upload.content_type, client=client)
         rooted_path = storage.rooted(path)
         item = AIProjectFile(project_id=project.id, release_id=release_id, uploaded_by_id=actor_id, file_kind=kind, category=category, folder=folder, title=title.strip()[:200], description=description.strip(), original_filename=original, storage_path=rooted_path, content_type=upload.content_type or "application/octet-stream", size=size, sha256=digest, is_primary=primary)
         db.add(item)

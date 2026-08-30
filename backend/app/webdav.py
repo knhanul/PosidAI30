@@ -68,8 +68,9 @@ class StorageBase:
     def upload(self, relative_dir: list[str], filename: str, source: BinaryIO) -> str:
         directory = normalize_storage_path("/".join(relative_dir))
         path = normalize_storage_path(posixpath.join(directory, safe_filename(filename)))
-        self.ensure_collection(relative_dir)
-        self.write_stream(path, source)
+        with self._client() as client:
+            self.ensure_collection(relative_dir, client)
+            self.write_stream(path, source, client=client)
         return self.rooted(path)
 
 
@@ -77,6 +78,10 @@ class LocalStorage(StorageBase):
     def __init__(self) -> None:
         super().__init__()
         self._base_dir.mkdir(parents=True, exist_ok=True)
+
+    def _client(self):
+        from contextlib import nullcontext
+        return nullcontext()
 
     @property
     def _base_dir(self) -> Path:
@@ -109,7 +114,7 @@ class LocalStorage(StorageBase):
             entries.append(StorageEntry(item.name, item.relative_to(self._base_dir).as_posix(), item.is_dir(), None if item.is_dir() else stat.st_size, datetime.fromtimestamp(stat.st_mtime).astimezone(), None if item.is_dir() else mimetypes.guess_type(item.name)[0]))
         return sorted(entries, key=lambda item: (not item.is_dir, item.name.lower()))
 
-    def write_stream(self, path: str, source: BinaryIO, content_type: str | None = None) -> None:
+    def write_stream(self, path: str, source: BinaryIO, content_type: str | None = None, client=None) -> None:
         target = self._full_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         source.seek(0)
@@ -212,7 +217,7 @@ class WebDAVStorage(StorageBase):
             entries.append(StorageEntry(name, normalize_storage_path(posixpath.join(base, name)), is_dir, None if is_dir or not size else int(size), content_type=props.findtext(f"{self.DAV}getcontenttype")))
         return sorted(entries, key=lambda item: (not item.is_dir, item.name.lower()))
 
-    def write_stream(self, path: str, source: BinaryIO, content_type: str | None = None) -> None:
+    def write_stream(self, path: str, source: BinaryIO, content_type: str | None = None, client: httpx.Client | None = None) -> None:
         self._require_config()
         source.seek(0)
         try:
@@ -224,8 +229,13 @@ class WebDAVStorage(StorageBase):
         headers = {"Content-Type": content_type or "application/octet-stream"}
         if size is not None:
             headers["Content-Length"] = str(size)
-        with self._client() as client:
+        own_client = client is None
+        client = client or self._client()
+        try:
             response = client.put(self._url(path), content=source, headers=headers)
+        finally:
+            if own_client:
+                client.close()
         self._check(response, (200, 201, 204))
 
     def move(self, source: str, destination: str, overwrite: bool = False) -> None:
