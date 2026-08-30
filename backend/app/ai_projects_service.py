@@ -173,9 +173,9 @@ def file_payload(item: AIProjectFile, project_slug: str | None = None) -> dict:
 
 
 def render_markdown(markdown_text: str) -> str:
-    renderer = mistune.create_markdown(escape=True, plugins=["table"])
+    renderer = mistune.create_markdown(escape=True, plugins=["table", "strikethrough", "task_lists"])
     rendered = renderer(markdown_text or "")
-    return bleach.clean(rendered, tags={"h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "strong", "em", "code", "pre", "ul", "ol", "li", "blockquote", "a", "img", "table", "thead", "tbody", "tr", "th", "td", "hr"}, attributes={"a": ["href", "title"], "img": ["src", "alt", "title"], "th": ["align"], "td": ["align"]}, protocols={"http", "https"}, strip=True)
+    return bleach.clean(rendered, tags={"h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "strong", "em", "del", "code", "pre", "ul", "ol", "li", "blockquote", "a", "img", "table", "thead", "tbody", "tr", "th", "td", "hr", "input"}, attributes={"a": ["href", "title"], "img": ["src", "alt", "title"], "th": ["align"], "td": ["align"], "input": ["type", "checked", "disabled"]}, protocols={"http", "https"}, strip=True)
 
 
 def trash_move(db: Session, item: AIProject | AIRelease | AIProjectFile, source: str, actor_id: int, operation: str) -> str:
