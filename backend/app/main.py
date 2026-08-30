@@ -345,7 +345,7 @@ def revoke_user_sessions(user_id: int, _: AdminSession = Depends(require_admin_c
 @app.get("/api/posts")
 def public_posts(
     category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
-    home: bool = Query(default=False), _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db),
+    home: bool = Query(default=False), db: Session = Depends(get_db),
 ) -> dict:
     statement = select(Post).options(selectinload(Post.attachments), selectinload(Post.author)).where(Post.status == "published", Post.deleted_at.is_(None))
     if home:
@@ -471,7 +471,7 @@ def public_inline_image(slug: str, filename: str, _: AdminSession = Depends(get_
 
 
 @app.get("/api/posts/{slug}/thumbnail")
-def public_thumbnail(slug: str, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def public_thumbnail(slug: str, db: Session = Depends(get_db)) -> StreamingResponse:
     item = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item or not item.thumbnail_path:
         raise HTTPException(status_code=404, detail="대표 이미지를 찾을 수 없습니다.")
