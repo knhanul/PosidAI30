@@ -149,6 +149,11 @@ def health() -> dict:
     return {"status": "ok", "service": settings.app_name}
 
 
+@app.get("/api/public-config")
+def public_config() -> dict:
+    return {"kakao_javascript_key": settings.kakao_javascript_key}
+
+
 @app.get("/api/auth/kakao/login")
 def kakao_login(request: Request, db: Session = Depends(get_db)) -> Response:
     if not settings.kakao_login_enabled or not settings.kakao_rest_api_key:

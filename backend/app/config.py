@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     allowed_origins: str = ""
 
     kakao_rest_api_key: str = ""
+    kakao_javascript_key: str = ""
     kakao_client_secret: str = ""
     kakao_redirect_uri: str = ""
     kakao_redirect_uri_development: str = "http://127.0.0.1:8091/api/auth/kakao/callback"

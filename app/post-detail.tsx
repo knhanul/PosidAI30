@@ -2,10 +2,38 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createComment, getCommunity, getMe, getPublishedPost, listComments, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
+import { createComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
 import { categories, posts, type Post } from "./content";
 import SiteIcon from "./site-icon";
 import UserMenu from "./user-menu";
+
+type KakaoLink = { mobileWebUrl: string; webUrl: string };
+type KakaoSdk = {
+  init: (key: string) => void;
+  isInitialized: () => boolean;
+  Share: { sendDefault: (options: { objectType: "feed"; content: { title: string; description: string; imageUrl: string; link: KakaoLink }; buttons: Array<{ title: string; link: KakaoLink }> }) => void };
+};
+
+declare global {
+  interface Window { Kakao?: KakaoSdk }
+}
+
+let kakaoSdkPromise: Promise<KakaoSdk> | null = null;
+
+function loadKakaoSdk() {
+  if (window.Kakao) return Promise.resolve(window.Kakao);
+  if (kakaoSdkPromise) return kakaoSdkPromise;
+  kakaoSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.8.2/kakao.min.js";
+    script.integrity = "sha384-zt/G7/KfaRQ9dT/QIkS0ujMtzouJqzuSJcXVQu50x0rl/+mD1dc70AeOejVbMD9E";
+    script.crossOrigin = "anonymous";
+    script.onload = () => window.Kakao ? resolve(window.Kakao) : reject(new Error("카카오 SDK를 불러오지 못했습니다."));
+    script.onerror = () => reject(new Error("카카오 SDK를 불러오지 못했습니다."));
+    document.head.appendChild(script);
+  });
+  return kakaoSdkPromise;
+}
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
@@ -20,9 +48,12 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   const [community, setCommunity] = useState({ likes: 0, liked: false, bookmarked: false });
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState("");
+  const [kakaoKey, setKakaoKey] = useState("");
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     getMe().then(setAuth).catch(() => setAuth(null));
+    getPublicConfig().then((config) => setKakaoKey(config.kakao_javascript_key)).catch(() => {});
     getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); }).catch(() => setError(!fallback));
   }, [fallback, slug]);
 
@@ -36,6 +67,23 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   async function submitComment(event: React.FormEvent) {
     event.preventDefault(); if (!auth || !post?.id || !commentBody.trim()) return;
     const created = await createComment(post.id, commentBody, auth.csrf_token); setComments((items) => [...items, created]); setCommentBody("");
+  }
+
+  async function shareToKakao() {
+    if (!post || !kakaoKey || sharing) return;
+    setSharing(true);
+    try {
+      const kakao = await loadKakaoSdk();
+      if (!kakao.isInitialized()) kakao.init(kakaoKey);
+      const shareUrl = window.location.href.split("#")[0];
+      const link = { mobileWebUrl: shareUrl, webUrl: shareUrl };
+      const imageUrl = new URL(post.thumbnailUrl || "/og.png", window.location.origin).href;
+      kakao.Share.sendDefault({ objectType: "feed", content: { title: post.title.slice(0, 200), description: post.summary.slice(0, 200), imageUrl, link }, buttons: [{ title: "게시물 보기", link }] });
+    } catch (shareError) {
+      window.alert(shareError instanceof Error ? shareError.message : "카카오톡 공유를 시작하지 못했습니다.");
+    } finally {
+      setSharing(false);
+    }
   }
 
   if (!post) return <main className="load-state"><strong>{error ? "글을 찾을 수 없습니다." : "글을 불러오고 있습니다."}</strong><Link href="/">홈으로 돌아가기</Link></main>;
@@ -72,7 +120,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
           {!post.id && <aside className="sample-note"><strong>콘텐츠 안내</strong><p>이 글은 서비스 화면 구성을 위한 예시입니다. 운영 API가 연결되면 관리자가 게시한 글로 대체됩니다.</p></aside>}
         </article>
 
-        <section className="community-box"><div className="community-actions"><button type="button" onClick={() => react("like")} disabled={!auth}>{community.liked ? "좋아요 취소" : "좋아요"} {community.likes}</button><button type="button" onClick={() => react("bookmark")} disabled={!auth}>{community.bookmarked ? "북마크 해제" : "북마크"}</button>{!auth && <a className="community-login-hint" href="/api/auth/kakao/login">카카오 로그인 후 이용할 수 있습니다.</a>}</div><h2>댓글</h2><div className="comment-list">{comments.map((item) => <article key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>)}</div>{auth && <form onSubmit={submitComment} className="comment-form"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="댓글을 남겨보세요." maxLength={2000} required /><button className="admin-primary">댓글 작성</button></form>}</section>
+        <section className="community-box"><div className="community-actions"><button type="button" onClick={() => react("like")} disabled={!auth}>{community.liked ? "좋아요 취소" : "좋아요"} {community.likes}</button><button type="button" onClick={() => react("bookmark")} disabled={!auth}>{community.bookmarked ? "북마크 해제" : "북마크"}</button><button className="kakao-share-button" type="button" onClick={shareToKakao} disabled={!kakaoKey || sharing} title={!kakaoKey ? "카카오 JavaScript 키 설정이 필요합니다." : undefined}>{sharing ? "공유 준비 중" : "카카오톡 공유"}</button>{!auth && <a className="community-login-hint" href="/api/auth/kakao/login">카카오 로그인 후 이용할 수 있습니다.</a>}</div><h2>댓글</h2><div className="comment-list">{comments.map((item) => <article key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>)}</div>{auth && <form onSubmit={submitComment} className="comment-form"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="댓글을 남겨보세요." maxLength={2000} required /><button className="admin-primary">댓글 작성</button></form>}</section>
 
         <section className="related-section"><div className="related-inner">
           <div className="section-heading"><div><span className="section-kicker">RELATED</span><h2>이어 읽기</h2></div><Link href={`/category/${post.category}`}>{category.label} 모두 보기 <SiteIcon name="arrow" size={17} /></Link></div>

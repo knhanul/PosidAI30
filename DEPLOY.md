@@ -37,6 +37,7 @@ Copy-Item .env.sample .env
 | `ENVIRONMENT` | 실행 환경 | `production` |
 | `ALLOWED_ORIGINS` | CORS 허용 출처 | 비어 있으면 제한 없음 |
 | `KAKAO_REST_API_KEY` | Kakao REST API 키 | 빈 값 (Kakao 로그인 사용 시 입력) |
+| `KAKAO_JAVASCRIPT_KEY` | 게시물 카카오톡 공유용 JavaScript 키 | 빈 값 (REST API 키와 다름) |
 | `KAKAO_CLIENT_SECRET` | Kakao Client Secret | 빈 값 (Kakao Developer Console에서 시크릿 코드 활성화한 경우에만 입력) |
 | `KAKAO_REDIRECT_URI` | 운영환경에서 사용하는 명시적 callback override (선택) | 비워 두면 환경별 URI 자동 선택 |
 | `KAKAO_REDIRECT_URI_DEVELOPMENT` | 개발환경 callback URI | `http://127.0.0.1:8091/api/auth/kakao/callback` |
@@ -57,6 +58,7 @@ Copy-Item .env.sample .env
 > - 운영 배포 전 `POSTGRES_PASSWORD`, `INITIAL_ADMIN_PASSWORD`, `WEBDAV_USERNAME`, `WEBDAV_PASSWORD`를 반드시 변경하세요.
 > - `DATABASE_URL`은 비워 두면 `POSTGRES_*` 값으로 자동 생성되며, 비밀번호의 특수문자는 자동으로 URL 인코딩됩니다. 직접 지정할 경우 특수문자를 URL 인코딩해야 합니다 (예: `posid00!!` → `posid00%21%21`).
 > - Kakao 로그인을 사용하려면 `KAKAO_LOGIN_ENABLED=true`로 설정하고 `KAKAO_REST_API_KEY`를 Kakao Developer Console에서 발급받아 입력하세요.
+> - 게시물 카카오톡 공유를 사용하려면 `KAKAO_JAVASCRIPT_KEY`에 JavaScript 키를 입력하고 Kakao Developer Console의 웹 플랫폼 사이트 도메인에 운영·개발 주소를 등록하세요.
 > - 개발환경(`ENVIRONMENT=development`)은 `KAKAO_REDIRECT_URI_DEVELOPMENT`, 운영환경(`ENVIRONMENT=production`)은 `KAKAO_REDIRECT_URI_PRODUCTION`을 자동 사용합니다. Kakao Console에 두 URI를 각각 등록하세요.
 > - 운영환경에서만 `KAKAO_REDIRECT_URI`를 직접 지정해 callback URI를 override할 수 있습니다.
 > - `KAKAO_CLIENT_SECRET`은 Kakao Developer Console에서 "시크릿 코드"를 활성화한 경우에만 필요합니다. 비활성화 상태면 비워 두세요.

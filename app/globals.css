@@ -268,8 +268,11 @@ img { max-width: 100%; display: block; }
 .admin-account-link p, .admin-account-link small { color: #817a74; font-size: 11px; line-height: 1.5; }
 .admin-account-link .admin-secondary { min-height: 34px; width: 100%; font-size: 11px; }
 .community-box { width: min(860px, calc(100% - 40px)); margin: 0 auto 60px; padding: 24px; border: 1px solid #e3dfda; border-radius: 14px; background: #fff; }
-.community-actions, .comment-form { display: flex; gap: 10px; align-items: center; }
+.community-actions, .comment-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .community-actions button { padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
+.community-actions .kakao-share-button { border-color: #fee500; background: #fee500; color: #191919; font-weight: 800; }
+.community-actions .kakao-share-button:hover:not(:disabled) { border-color: #f3d900; background: #f3d900; }
+.community-actions button:disabled { opacity: .55; cursor: not-allowed; }
 .community-actions small { color: #888; }
 .community-box h2 { margin: 24px 0 12px; font-size: 18px; }
 .comment-list { display: grid; gap: 12px; }

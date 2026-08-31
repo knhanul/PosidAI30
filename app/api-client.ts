@@ -66,6 +66,10 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function getPublicConfig() {
+  return apiFetch<{ kakao_javascript_key: string }>("/api/public-config");
+}
+
 export function markdownToBlocks(markdown: string): ContentBlock[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const blocks: ContentBlock[] = [];
