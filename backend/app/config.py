@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     kakao_redirect_uri_production: str = "https://posidai30.nuni.co.kr/api/auth/kakao/callback"
     kakao_login_enabled: bool = False
     kakao_state_secret: str = ""
+    kakao_admin_emails: str = "knhanul@naver.com"
 
     session_cookie_name: str = "posid_ai30_session"
     session_days: int = 7

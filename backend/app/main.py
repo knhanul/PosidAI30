@@ -225,6 +225,10 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
     properties = kakao_user.get("properties") or {}
     kakao_nickname = properties.get("nickname") if isinstance(properties.get("nickname"), str) else None
     profile_image = properties.get("profile_image") if isinstance(properties.get("profile_image"), str) else None
+    kakao_account = kakao_user.get("kakao_account") or {}
+    kakao_email = kakao_account.get("email") if isinstance(kakao_account.get("email"), str) else None
+    admin_emails = {item.strip().lower() for item in settings.kakao_admin_emails.split(",") if item.strip()}
+    is_admin_email = bool(kakao_email and kakao_email.lower() in admin_emails)
     identity = db.scalar(select(AuthIdentity).where(AuthIdentity.provider == "kakao", AuthIdentity.provider_subject == subject))
     if intent == "link":
         try:
@@ -247,7 +251,7 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
     if not identity:
         if intent != "login":
             return kakao_error("/admin/login", "not_linked")
-        user = AdminUser(username=f"kakao_{subject}", display_name="Kakao 사용자", display_name_confirmed=False, password_hash=hash_password(secrets.token_urlsafe(32)), role="user")
+        user = AdminUser(username=f"kakao_{subject}", display_name="Kakao 사용자", display_name_confirmed=False, password_hash=hash_password(secrets.token_urlsafe(32)), role="admin" if is_admin_email else "user")
         db.add(user); db.flush()
         identity = AuthIdentity(user_id=user.id, provider="kakao", provider_subject=subject, provider_nickname=kakao_nickname, profile_image_url=profile_image, last_login_at=utcnow())
         db.add(identity); db.commit()
@@ -256,6 +260,10 @@ def kakao_callback(request: Request, db: Session = Depends(get_db)) -> Response:
         identity.profile_image_url = profile_image
         identity.last_login_at = utcnow()
         identity.updated_at = utcnow()
+        if is_admin_email:
+            account = db.get(AdminUser, identity.user_id)
+            if account and account.role != "admin":
+                account.role = "admin"
         db.commit()
     session, raw_token = create_session(db, identity.user_id, persistent=True)
     account = db.get(AdminUser, identity.user_id)
@@ -359,16 +367,11 @@ def public_posts(
 
 
 @app.get("/api/posts/{slug}")
-def public_post(slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+def public_post(slug: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
     item = db.scalar(select(Post).options(selectinload(Post.attachments), selectinload(Post.author)).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
-    session = None
-    try:
-        session = get_current_session(request, Response(), db)
-    except HTTPException:
-        pass
-    return post_payload(item, owned_by_current_user=bool(session and session.user_id == item.author_id))
+    return post_payload(item, owned_by_current_user=bool(session.user_id == item.author_id))
 
 
 def get_public_post_by_id(post_id: uuid.UUID, db: Session) -> Post:
@@ -379,16 +382,11 @@ def get_public_post_by_id(post_id: uuid.UUID, db: Session) -> Post:
 
 
 @app.get("/api/posts/{slug}/community")
-def community_status(slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+def community_status(slug: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
     post = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not post:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
-    session = None
-    try:
-        session = get_current_session(request, Response(), db)
-    except HTTPException:
-        pass
-    return {"likes": db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post.id)) or 0, "liked": bool(session and db.get(PostLike, (post.id, session.user_id))), "bookmarked": bool(session and db.get(Bookmark, (post.id, session.user_id)))}
+    return {"likes": db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post.id)) or 0, "liked": bool(db.get(PostLike, (post.id, session.user_id))), "bookmarked": bool(db.get(Bookmark, (post.id, session.user_id)))}
 
 
 @app.post("/api/posts/{post_id}/like")
@@ -422,7 +420,7 @@ def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_
 
 
 @app.get("/api/posts/{post_id}/comments")
-def list_comments(post_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+def list_comments(post_id: uuid.UUID, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)
     items = db.scalars(select(Comment).options(selectinload(Comment.user)).where(Comment.post_id == post_id).order_by(Comment.created_at.asc())).all()
     return {"items": [{"id": str(item.id), "body": item.body, "author_name": item.user.display_name, "created_at": item.created_at} for item in items]}
@@ -447,7 +445,7 @@ def upload_new_post_inline_image(file: UploadFile = File(...), session: AdminSes
 
 
 @app.get("/api/inline-images/{user_id}/{filename}")
-def public_new_post_inline_image(user_id: int, filename: str) -> StreamingResponse:
+def public_new_post_inline_image(user_id: int, filename: str, _: AdminSession = Depends(get_current_session)) -> StreamingResponse:
     safe_name = safe_filename(filename)
     content_type = "image/webp" if safe_name.lower().endswith(".webp") else "image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     return file_response(f"{settings.webdav_root.strip('/')}/inline-images/{user_id}/{safe_name}", content_type)
@@ -468,7 +466,7 @@ def upload_inline_image(post_id: uuid.UUID, file: UploadFile = File(...), sessio
 
 
 @app.get("/api/posts/{slug}/inline-images/{filename}")
-def public_inline_image(slug: str, filename: str, db: Session = Depends(get_db)) -> StreamingResponse:
+def public_inline_image(slug: str, filename: str, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     item = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
@@ -486,7 +484,7 @@ def public_thumbnail(slug: str, db: Session = Depends(get_db)) -> StreamingRespo
 
 
 @app.get("/api/attachments/{attachment_id}/download")
-def public_attachment(attachment_id: uuid.UUID, db: Session = Depends(get_db)) -> StreamingResponse:
+def public_attachment(attachment_id: uuid.UUID, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
     item = db.scalar(select(Attachment).join(Post).where(Attachment.id == attachment_id, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="첨부파일을 찾을 수 없습니다.")
@@ -606,6 +604,25 @@ def delete_post(post_id: uuid.UUID, _: AdminSession = Depends(require_admin_csrf
     item.deleted_at = utcnow()
     item.is_featured = False
     add_audit(db, _.user_id, "post.soft_delete", "post", str(item.id))
+    db.commit()
+
+
+@app.put("/api/admin/posts/{post_id}/featured")
+def set_featured(post_id: uuid.UUID, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> dict:
+    item = get_active_post(db, post_id)
+    item.show_on_home = True
+    item.is_featured = True
+    ensure_featured_unique(db, item)
+    add_audit(db, session.user_id, "post.featured", "post", str(item.id))
+    db.commit()
+    return post_payload(get_active_post(db, item.id), admin=True)
+
+
+@app.delete("/api/admin/posts/{post_id}/featured", status_code=204)
+def unset_featured(post_id: uuid.UUID, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> None:
+    item = get_active_post(db, post_id)
+    item.is_featured = False
+    add_audit(db, session.user_id, "post.unfeatured", "post", str(item.id))
     db.commit()
 
 

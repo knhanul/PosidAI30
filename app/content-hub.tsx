@@ -38,8 +38,7 @@ export default function ContentHub() {
     return [...unique.values()];
   }, [livePosts]);
   const featured = homePosts.find((post) => post.featured) ?? homePosts[0];
-  const quickReads = homePosts.filter((post) => post.id !== featured?.id).slice(0, 3);
-  const used = new Set([featured?.id, ...quickReads.map((post) => post.id)]);
+  const used = new Set([featured?.id]);
   const filteredLatest = homePosts.filter((post) => (active === "all" || post.category === active) && (!query.trim() || [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(query.trim().toLowerCase())));
   const services = homePosts.filter((post) => post.category === "together" && !used.has(post.id));
 
@@ -49,8 +48,6 @@ export default function ContentHub() {
       <section className="home-feature section-wrap">
         {featured ? <div className="feature-content"><div className="feature-copy"><div className="feature-label"><span>{categories[featured.category].label}</span>{featured.new && <b>NEW</b>}</div><h1>{featured.title}</h1><p>{featured.summary}</p>{featured.keyPoints?.length ? <ul className="feature-points">{featured.keyPoints.slice(0, 3).map((point) => <li key={point}>{point}</li>)}</ul> : null}<Meta post={featured} /><Link className="primary-button" href={`/posts/${featured.slug}`}>내용 살펴보기 <SiteIcon name="arrow" size={19} /></Link></div><Link className="feature-image" href={`/posts/${featured.slug}`} aria-label={`${featured.title} 읽기`}><Thumb post={featured} /></Link></div> : <div className="empty-state home-empty"><strong>{loading ? "게시글을 불러오는 중입니다." : "홈에 표시할 게시글이 없습니다."}</strong><p>관리자 화면에서 글을 저장하고 ‘홈에 표시’를 선택해 주세요.</p></div>}
       </section>
-
-      {quickReads.length > 0 && <section className="quick-section section-wrap"><div className="section-heading"><div><span className="section-kicker">QUICK READS</span><h2>빠르게 읽기</h2></div><span>대표 글을 제외한 최신 홈 표시 글</span></div><div className="quick-grid">{quickReads.map((post) => <Link href={`/posts/${post.slug}`} className="quick-card" key={post.id ?? post.slug}><Thumb post={post} compact /><div><Meta post={post} /><strong>{post.title}</strong><p>{post.summary}</p></div><SiteIcon name="arrow" size={18} /></Link>)}</div></section>}
 
       <section className="stories-section section-wrap" id="stories"><div className="section-heading stories-heading"><div><span className="section-kicker">LATEST POSTS</span><h2>방금 올라온 이야기</h2></div><label className="search-box"><SiteIcon name="search" size={19} /><span className="sr-only">글 검색</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제목·요약·토픽으로 찾기" /></label></div><div className="filter-row" role="group" aria-label="카테고리 필터">{nav.map((slug) => <button key={slug} className={active === slug ? "active" : ""} onClick={() => setActive(slug)}>{slug === "all" ? labels.all : categories[slug].label}</button>)}</div>{filteredLatest.length ? <div className="latest-grid">{filteredLatest.slice(0, 8).map((post) => <Link href={`/posts/${post.slug}`} className="latest-card" key={post.id ?? post.slug}><Thumb post={post} /><div className="latest-copy"><Meta post={post} /><h3>{post.title}</h3><p>{post.summary}</p><div className="topic-row">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div></div>{post.new && <b className="new-chip">NEW</b>}</Link>)}</div> : <div className="empty-state"><strong>{query ? "검색 결과가 없습니다." : "표시할 게시글이 없습니다."}</strong><p>다른 카테고리를 선택하거나 관리자에게 홈 노출을 요청해 주세요.</p></div>}<div className="more-link-wrap"><Link className="secondary-button" href={active === "all" ? "/category/news" : `/category/${active}`}>더보기 <SiteIcon name="arrow" size={17} /></Link></div></section>
 

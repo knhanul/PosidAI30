@@ -433,3 +433,123 @@ echo; echo "Deployment successful: $TS"
 - [ ] Kakao Developer Console의 Redirect URI와 `KAKAO_REDIRECT_URI`가 일치
 - [ ] 서버에서 `curl http://127.0.0.1:8091/api/health`가 `{"status":"ok"}` 반환
 - [ ] 관리자 로그인(`http://서버주소:8091/admin/login`) 정상 동작
+
+## 9. Git 기반 배포 (PC에서 push, 서버에서 pull)
+
+zip 파일 전송 대신 Git을 이용해 배포하는 방법입니다. 서버를 Git 저장소로 한 번 설정하면 이후 업데이트는 `git pull`만으로 간단히 반영할 수 있습니다.
+
+### 9-1. 서버 최초 설정 (Git 저장소가 없는 경우)
+
+서버에 프로젝트가 없거나 Git 저장소가 아닌 경우, 한 번만 수행합니다.
+
+```bash
+# 서버
+cd /opt
+
+# 기존 디렉토리가 있으면 백업
+if [ -d /opt/posid-ai30 ]; then
+  TS=$(date +%Y%m%d-%H%M%S)
+  mv /opt/posid-ai30 /opt/posid-ai30-backup-$TS
+fi
+
+# Git 저장소 클론
+git clone https://github.com/knhanul/PosidAI30.git /opt/posid-ai30
+cd /opt/posid-ai30
+
+# 환경 파일 생성 및 편집
+cp .env.sample .env
+vi .env
+
+# Docker 빌드 및 실행
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d --build
+
+# 상태 확인
+docker compose --env-file .env -f deployment/docker-compose.example.yml ps
+curl http://127.0.0.1:8091/api/health
+```
+
+> 기존 `.env`가 백업 디렉토리에 있다면 복사해 옵니다:
+> ```bash
+> cp /opt/posid-ai30-backup-*/.env /opt/posid-ai30/.env
+> ```
+
+### 9-2. 일반적인 업데이트 배포
+
+개발 PC에서 코드를 수정하고 push한 후, 서버에서 pull하여 배포합니다.
+
+#### 개발 PC (Windows PowerShell)
+
+```powershell
+cd C:\Pjt\PosidAI30
+
+# 변경 사항 커밋 및 푸시
+git add -A
+git commit -m "변경 내용 요약"
+git push origin main
+```
+
+#### 서버 (Linux)
+
+```bash
+set -euo pipefail
+cd /opt/posid-ai30
+
+# --------------------------------------
+# 1. 백업
+# --------------------------------------
+TS=$(date +%Y%m%d-%H%M%S)
+BACKUP_DIR=/opt/posid-ai30-backups
+mkdir -p "$BACKUP_DIR"
+cp .env "$BACKUP_DIR/env-$TS"
+chmod 600 "$BACKUP_DIR/env-$TS"
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T db pg_dump -U posid_ai30 posid_ai30 | gzip > "$BACKUP_DIR/db-$TS.sql.gz"
+test -s "$BACKUP_DIR/db-$TS.sql.gz" && gzip -t "$BACKUP_DIR/db-$TS.sql.gz"
+
+# --------------------------------------
+# 2. 최신 코드 받기
+# --------------------------------------
+git pull origin main
+
+# --------------------------------------
+# 3. Docker 재빌드 및 반영
+# --------------------------------------
+docker compose --env-file .env -f deployment/docker-compose.example.yml config -q
+docker compose --env-file .env -f deployment/docker-compose.example.yml build
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d --remove-orphans
+
+# --------------------------------------
+# 4. 상태 확인
+# --------------------------------------
+docker compose --env-file .env -f deployment/docker-compose.example.yml ps
+curl --fail --silent --show-error http://127.0.0.1:8091/api/health
+echo
+echo "Deployment successful: $TS"
+```
+
+### 9-3. .env가 Git에 포함되지 않도록 주의
+
+`.env`는 `.gitignore`에 등록되어 있어 Git에 커밋되지 않습니다. 서버에서 직접 편집해야 하며, `git pull` 시에도 덮어쓰지 않습니다.
+
+새 환경 변수가 추가된 경우 (예: `KAKAO_ADMIN_EMAILS`), 서버의 `.env`에 수동으로 추가해야 합니다:
+
+```bash
+# 서버
+cd /opt/posid-ai30
+vi .env   # 새 변수 추가
+
+# .env.sample과 비교해서 누락된 변수 확인
+diff .env.sample .env
+```
+
+### 9-4. 빠른 업데이트 (백업 생략)
+
+긴급 수정이나 개발 중에는 백업을 생략하고 빠르게 반영할 수 있습니다.
+
+```bash
+# 서버
+cd /opt/posid-ai30
+git pull origin main
+docker compose --env-file .env -f deployment/docker-compose.example.yml up --build -d
+curl http://127.0.0.1:8091/api/health
+```
+
