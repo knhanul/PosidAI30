@@ -60,7 +60,10 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     const detail = Array.isArray(body?.detail)
       ? body.detail.map((item) => typeof item === "object" && item !== null && "msg" in item ? String(item.msg) : String(item)).join("; ")
       : typeof body?.detail === "string" ? body.detail : null;
-    throw new Error(detail ?? `요청을 처리하지 못했습니다. (${response.status})`);
+    const message = detail ?? `요청을 처리하지 못했습니다. (${response.status})`;
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

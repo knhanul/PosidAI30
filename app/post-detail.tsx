@@ -56,7 +56,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   useEffect(() => {
     getMe().then(setAuth).catch(() => setAuth(null));
     getPublicConfig().then((config) => setKakaoKey(config.kakao_javascript_key)).catch(() => {});
-    getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); listPublishedPosts({ category: item.category }).then((data) => setRelated(data.filter((p) => p.slug !== item.slug).slice(0, 2))).catch(() => setRelated([])); }).catch(() => setError(!fallback));
+    getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); listPublishedPosts({ category: item.category }).then((data) => setRelated(data.filter((p) => p.slug !== item.slug).slice(0, 2))).catch(() => setRelated([])); }).catch((err: Error & { status?: number }) => { if (err?.status === 401) { setNeedLogin(true); setError(false); } else { setError(!fallback); } });
   }, [fallback, slug]);
 
   async function react(kind: "like" | "bookmark") {
