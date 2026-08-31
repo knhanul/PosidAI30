@@ -39,6 +39,7 @@ class PostInput(BaseModel):
     summary: str = Field(min_length=1, max_length=400)
     body_markdown: str = Field(min_length=1, max_length=200_000)
     content_format: Literal["markdown", "html"] = "markdown"
+    content_density: Literal["normal", "compact"] = "normal"
     topics: list[str] = Field(default_factory=list, max_length=10)
     key_points: list[str] = Field(default_factory=list, max_length=3)
     is_featured: bool = False

@@ -25,6 +25,7 @@ export type Post = {
   thumbnailUrl?: string | null;
   bodyMarkdown?: string;
   contentFormat?: "markdown" | "html";
+  contentDensity?: "normal" | "compact";
   bodyHtml?: string;
   attachments?: Array<{ id: string; filename: string; size: number; downloadUrl: string }>;
   service?: {

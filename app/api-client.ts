@@ -16,6 +16,7 @@ export type ApiPost = {
   summary: string;
   body_markdown?: string;
   content_format: "markdown" | "html";
+  content_density?: "normal" | "compact";
   topics: string[];
   key_points: string[];
   status: "draft" | "published";
@@ -43,6 +44,7 @@ export type PostPayload = {
   summary: string;
   body_markdown: string;
   content_format: "markdown" | "html";
+  content_density?: "normal" | "compact";
   topics: string[];
   key_points: string[];
   is_featured: boolean;
@@ -115,7 +117,7 @@ export function toPublicPost(post: ApiPost): Post {
     topic: post.topics, keyPoints: post.key_points, date: new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(publishedDate)).replace(/\. /g, ".").replace(/\.$/, ""),
     readTime: `${Math.max(1, Math.ceil(body.replace(/<[^>]*>/g, " ").length / 700))}분`, author: post.author_name,
     featured: post.is_featured, new: age >= 0 && age <= 7 * 24 * 60 * 60 * 1000, status: post.status, showOnHome: post.show_on_home, ownedByCurrentUser: post.owned_by_current_user,
-    thumbnailUrl: post.thumbnail_url, bodyMarkdown: body, contentFormat: post.content_format, bodyHtml: post.content_format === "html" ? body : undefined, body: markdownToBlocks(body),
+    thumbnailUrl: post.thumbnail_url, bodyMarkdown: body, contentFormat: post.content_format, contentDensity: post.content_density === "compact" ? "compact" : "normal", bodyHtml: post.content_format === "html" ? body : undefined, body: markdownToBlocks(body),
     attachments: (post.attachments ?? []).map((file) => ({ id: file.id, filename: file.filename, size: file.size, downloadUrl: file.download_url })),
     service: post.category === "together" ? { status: post.service_status === "사용 가능" ? "사용 가능" : "준비 중", audience: post.service_audience ?? "모든 구성원", actionLabel: "서비스 써보기", actionHref: post.service_url ?? "#service-guide" } : undefined,
   };

@@ -59,7 +59,7 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
         thumbnail_url = f"/api/admin/posts/{item.id}/thumbnail" if admin else f"/api/posts/{quote(item.slug)}/thumbnail"
     return {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
-        "body_markdown": item.body_markdown, "content_format": item.content_format, "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
+        "body_markdown": item.body_markdown, "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at,
@@ -73,7 +73,7 @@ def post_summary_payload(item: Post, owned_by_current_user: bool = False) -> dic
         thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail"
     return {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
-        "content_format": item.content_format, "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
+        "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at, "published_at": item.published_at,
@@ -97,6 +97,7 @@ def apply_post_input(item: Post, data: PostInput) -> None:
     item.summary = data.summary.strip()
     item.body_markdown = sanitize_html(data.body_markdown.strip()) if data.content_format == "html" else data.body_markdown.strip()
     item.content_format = data.content_format
+    item.content_density = data.content_density
     item.topics = data.topics
     item.key_points = [point.strip()[:160] for point in data.key_points if point.strip()][:3]
     item.status = "published"

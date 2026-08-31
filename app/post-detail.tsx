@@ -108,10 +108,10 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
           <div className="topic-row article-topics">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div>
         </div></div>
 
-        <article className="article-body">
+        <article className={`article-body ${post.contentDensity === "compact" ? "density-compact" : "density-normal"}`}>
           {post.thumbnailUrl && <img className="article-cover" src={post.thumbnailUrl} alt={`${post.title} 대표 이미지`} />}
           {post.service && <section className="service-guide" id="service-guide"><div><span>서비스 상태</span><strong>{post.service.status}</strong></div><div><span>추천 대상</span><strong>{post.service.audience}</strong></div><a href={post.service.actionHref} target={post.service.actionHref.startsWith("http") ? "_blank" : undefined} rel="noreferrer">서비스 써보기<SiteIcon name="arrow" size={17} /></a></section>}
-          {post.contentFormat === "html" && post.bodyHtml ? <div className="article-rich-body" dangerouslySetInnerHTML={{ __html: post.bodyHtml }} /> : post.body.map((block, index) => {
+          {post.contentFormat === "html" && post.bodyHtml ? <div className={`article-rich-body ${post.contentDensity === "compact" ? "density-compact" : "density-normal"}`} dangerouslySetInnerHTML={{ __html: post.bodyHtml }} /> : post.body.map((block, index) => {
             if (block.type === "heading") return <h2 key={index}>{block.text}</h2>;
             if (block.type === "paragraph") return <p key={index}>{block.text}</p>;
             if (block.type === "steps") return <ol className="article-steps" key={index}>{block.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}><span>{itemIndex + 1}</span><p>{item}</p></li>)}</ol>;
