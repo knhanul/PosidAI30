@@ -35,7 +35,7 @@ export default function WritePage() {
         try {
           const post = await getUserPostForEdit(editId);
           if (active) {
-            setForm({ category: post.category, title: post.title, summary: post.summary, body: post.content_format === "html" ? post.body_markdown : `<p>${post.body_markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>` });
+            setForm({ category: post.category, title: post.title, summary: post.summary, body: post.content_format === "html" ? (post.body_markdown ?? "") : `<p>${(post.body_markdown ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>` });
             if (post.thumbnail_url) setThumbnailPreview(post.thumbnail_url);
           }
         } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "글을 불러오지 못했습니다."); }

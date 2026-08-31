@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
-import { categories, posts, type Post } from "./content";
+import { createComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, listPublishedPosts, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
+import { categories, type Post } from "./content";
 import SiteIcon from "./site-icon";
 import UserMenu from "./user-menu";
 
@@ -51,10 +51,11 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   const [commentBody, setCommentBody] = useState("");
   const [kakaoKey, setKakaoKey] = useState("");
   const [sharing, setSharing] = useState(false);
+  const [related, setRelated] = useState<Post[]>([]);
 
   useEffect(() => {
     getMe().then(setAuth).catch(() => setAuth(null));
-    getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); }).catch(() => setError(!fallback));
+    getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); listPublishedPosts({ category: item.category }).then((data) => setRelated(data.filter((p) => p.slug !== item.slug).slice(0, 2))).catch(() => setRelated([])); }).catch(() => setError(!fallback));
   }, [fallback, slug]);
 
   async function react(kind: "like" | "bookmark") {
@@ -88,7 +89,6 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
 
   if (!post) return <main className="load-state"><strong>{needLogin ? "로그인이 필요합니다." : error ? "글을 찾을 수 없습니다." : "글을 불러오고 있습니다."}</strong>{needLogin ? <a className="primary-button" href="/api/auth/kakao/login">카카오로 로그인하기</a> : <Link href="/">홈으로 돌아가기</Link>}</main>;
   const category = categories[post.category];
-  const related = posts.filter((item) => item.category === post.category && item.slug !== post.slug).slice(0, 2);
 
   return (
     <div className="article-page">
@@ -122,10 +122,10 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
 
         <section className="community-box"><div className="community-actions"><button type="button" onClick={() => react("like")} disabled={!auth}>{community.liked ? "좋아요 취소" : "좋아요"} {community.likes}</button><button type="button" onClick={() => react("bookmark")} disabled={!auth}>{community.bookmarked ? "북마크 해제" : "북마크"}</button><button className="kakao-share-button" type="button" onClick={shareToKakao} disabled={!kakaoKey || sharing} title={!kakaoKey ? "카카오 JavaScript 키 설정이 필요합니다." : undefined}>{sharing ? "공유 준비 중" : "카카오톡 공유"}</button>{!auth && <a className="community-login-hint" href="/api/auth/kakao/login">카카오 로그인 후 이용할 수 있습니다.</a>}</div><h2>댓글</h2><div className="comment-list">{comments.map((item) => <article key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>)}</div>{auth && <form onSubmit={submitComment} className="comment-form"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="댓글을 남겨보세요." maxLength={2000} required /><button className="admin-primary">댓글 작성</button></form>}</section>
 
-        <section className="related-section"><div className="related-inner">
+        {related.length > 0 && <section className="related-section"><div className="related-inner">
           <div className="section-heading"><div><span className="section-kicker">RELATED</span><h2>이어 읽기</h2></div><Link href={`/category/${post.category}`}>{category.label} 모두 보기 <SiteIcon name="arrow" size={17} /></Link></div>
           <div className="related-grid">{related.map((item) => <Link href={`/posts/${item.slug}`} key={item.slug}><span>{category.label}</span><strong>{item.title}</strong><p>{item.summary}</p></Link>)}</div>
-        </div></section>
+        </div></section>}
       </main>
     </div>
   );

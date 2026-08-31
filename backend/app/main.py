@@ -12,6 +12,7 @@ import httpx
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +29,7 @@ from .webdav import safe_filename, storage
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, docs_url="/api/docs" if settings.environment != "production" else None, openapi_url="/api/openapi.json" if settings.environment != "production" else None)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(ai_projects_router)
 if settings.origins:
     app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
@@ -62,6 +64,19 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at,
         "published_at": item.published_at, "attachments": [attachment_payload(file) for file in item.attachments],
+    }
+
+
+def post_summary_payload(item: Post, owned_by_current_user: bool = False) -> dict:
+    thumbnail_url = None
+    if item.thumbnail_type == "webdav" and item.thumbnail_path:
+        thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail"
+    return {
+        "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
+        "content_format": item.content_format, "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
+        "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
+        "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
+        "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at, "published_at": item.published_at,
     }
 
 
@@ -352,7 +367,7 @@ def public_posts(
     category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
     home: bool = Query(default=False), db: Session = Depends(get_db),
 ) -> dict:
-    statement = select(Post).options(selectinload(Post.attachments), selectinload(Post.author)).where(Post.status == "published", Post.deleted_at.is_(None))
+    statement = select(Post).options(selectinload(Post.author)).where(Post.status == "published", Post.deleted_at.is_(None))
     if home:
         statement = statement.where(Post.show_on_home.is_(True))
     if category:
@@ -362,8 +377,8 @@ def public_posts(
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         statement = statement.where(or_(Post.title.ilike(pattern), Post.summary.ilike(pattern), Post.body_markdown.ilike(pattern)))
-    statement = statement.order_by(Post.is_featured.desc(), Post.published_at.desc().nullslast(), Post.created_at.desc()).limit(200)
-    return {"items": [post_payload(item) for item in db.scalars(statement).all()]}
+    statement = statement.order_by(Post.published_at.desc().nullslast(), Post.created_at.desc()).limit(200)
+    return {"items": [post_summary_payload(item) for item in db.scalars(statement).all()]}
 
 
 @app.get("/api/posts/{slug}")

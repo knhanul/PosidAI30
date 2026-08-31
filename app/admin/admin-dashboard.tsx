@@ -19,7 +19,7 @@ const emptyEditor: EditorState = {
 function fromApi(post: ApiPost): EditorState {
   return {
     id: post.id, category: post.category, title: post.title, summary: post.summary,
-    body_markdown: post.content_format === "html" ? post.body_markdown : `<p>${post.body_markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>`, content_format: post.content_format, topics: post.topics, key_points: post.key_points, is_featured: post.is_featured, show_on_home: post.show_on_home,
+    body_markdown: post.content_format === "html" ? (post.body_markdown ?? "") : `<p>${(post.body_markdown ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>`, content_format: post.content_format, topics: post.topics, key_points: post.key_points, is_featured: post.is_featured, show_on_home: post.show_on_home,
     thumbnail_type: post.thumbnail_type, service_status: post.service_status, service_audience: post.service_audience, service_url: post.service_url,
   };
 }
@@ -130,7 +130,7 @@ export default function AdminDashboard() {
                 <section className="home-points-editor"><h3>홈 노출 핵심 포인트</h3>{keyPointInput.map((point, index) => <input key={index} value={point} maxLength={160} placeholder={`핵심 포인트 ${index + 1}`} onChange={(event) => setKeyPointInput((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />)}<small>선택 입력 · 최대 3개</small></section>
                 <label><span>본문 *</span><RichTextEditor value={editor.body_markdown} onChange={(value) => update("body_markdown", value)} onUpload={async (file) => editor.id ? (await uploadInlineImage(editor.id, file, csrf)).url : (await uploadNewPostInlineImage(file, csrf)).url} onUploadingChange={setImageUploading} disabled={busy} /><small>문서처럼 작성하면 허용된 HTML로 저장됩니다. 첫 글 작성부터 사진을 추가할 수 있습니다.</small></label>
                 <section className="upload-panel"><div><span>첨부파일</span><p>PDF, 문서, 이미지 등 파일을 여러 개 선택할 수 있습니다.</p></div><input type="file" multiple onChange={(event) => setAttachments(Array.from(event.target.files ?? []))} />
-                  {!!selectedPost?.attachments.length && <div className="saved-files">{selectedPost.attachments.map((file) => <div key={file.id}><span>{file.filename}</span><button type="button" onClick={() => removeAttachment(file.id)}>삭제</button></div>)}</div>}
+                  {!!selectedPost?.attachments?.length && <div className="saved-files">{selectedPost.attachments.map((file) => <div key={file.id}><span>{file.filename}</span><button type="button" onClick={() => removeAttachment(file.id)}>삭제</button></div>)}</div>}
                 </section>
               </section>
               <aside className="editor-side-fields">

@@ -14,7 +14,7 @@ export type ApiPost = {
   category: CategorySlug;
   title: string;
   summary: string;
-  body_markdown: string;
+  body_markdown?: string;
   content_format: "markdown" | "html";
   topics: string[];
   key_points: string[];
@@ -30,7 +30,7 @@ export type ApiPost = {
   updated_at: string;
   published_at: string | null;
   show_on_home: boolean;
-  attachments: ApiAttachment[];
+  attachments?: ApiAttachment[];
   owned_by_current_user: boolean;
 };
 
@@ -106,13 +106,14 @@ export function markdownToBlocks(markdown: string): ContentBlock[] {
 export function toPublicPost(post: ApiPost): Post {
   const publishedDate = post.published_at ?? post.created_at;
   const age = Date.now() - new Date(publishedDate).getTime();
+  const body = post.body_markdown ?? "";
   return {
     id: post.id, slug: post.slug, category: post.category, title: post.title, summary: post.summary,
     topic: post.topics, keyPoints: post.key_points, date: new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(publishedDate)).replace(/\. /g, ".").replace(/\.$/, ""),
-    readTime: `${Math.max(1, Math.ceil(post.body_markdown.replace(/<[^>]*>/g, " ").length / 700))}분`, author: post.author_name,
+    readTime: `${Math.max(1, Math.ceil(body.replace(/<[^>]*>/g, " ").length / 700))}분`, author: post.author_name,
     featured: post.is_featured, new: age >= 0 && age <= 7 * 24 * 60 * 60 * 1000, status: post.status, showOnHome: post.show_on_home, ownedByCurrentUser: post.owned_by_current_user,
-    thumbnailUrl: post.thumbnail_url, bodyMarkdown: post.body_markdown, contentFormat: post.content_format, bodyHtml: post.content_format === "html" ? post.body_markdown : undefined, body: markdownToBlocks(post.body_markdown),
-    attachments: post.attachments.map((file) => ({ id: file.id, filename: file.filename, size: file.size, downloadUrl: file.download_url })),
+    thumbnailUrl: post.thumbnail_url, bodyMarkdown: body, contentFormat: post.content_format, bodyHtml: post.content_format === "html" ? body : undefined, body: markdownToBlocks(body),
+    attachments: (post.attachments ?? []).map((file) => ({ id: file.id, filename: file.filename, size: file.size, downloadUrl: file.download_url })),
     service: post.category === "together" ? { status: post.service_status === "사용 가능" ? "사용 가능" : "준비 중", audience: post.service_audience ?? "모든 구성원", actionLabel: "서비스 써보기", actionHref: post.service_url ?? "#service-guide" } : undefined,
   };
 }
