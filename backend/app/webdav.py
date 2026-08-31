@@ -2,6 +2,7 @@ import mimetypes
 import posixpath
 import re
 import shutil
+import ssl
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -157,7 +158,13 @@ class WebDAVStorage(StorageBase):
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="WebDAV 연결 정보가 설정되지 않았습니다.")
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(auth=httpx.DigestAuth(self.settings.webdav_username, self.settings.webdav_password), verify=self.settings.webdav_verify_tls, timeout=self.settings.webdav_timeout_seconds, follow_redirects=True, trust_env=False)
+        tls_context = ssl.create_default_context()
+        tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        tls_context.maximum_version = ssl.TLSVersion.TLSv1_2
+        if not self.settings.webdav_verify_tls:
+            tls_context.check_hostname = False
+            tls_context.verify_mode = ssl.CERT_NONE
+        return httpx.Client(auth=httpx.DigestAuth(self.settings.webdav_username, self.settings.webdav_password), verify=tls_context, timeout=self.settings.webdav_timeout_seconds, follow_redirects=True, trust_env=False)
 
     def _url(self, path: str = "") -> str:
         encoded = "/".join(quote(part, safe="") for part in self.rooted(path).split("/") if part)
