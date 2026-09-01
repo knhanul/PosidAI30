@@ -12,6 +12,7 @@ export default function SiteHeader() {
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈">
           <span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span>
+          <span className="brand-title">AI담당관</span>
         </Link>
         <nav className="post-nav" aria-label="주요 메뉴">
           {navItems.map((slug) => (
