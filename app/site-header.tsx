@@ -12,6 +12,7 @@ export default function SiteHeader() {
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈">
           <span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span>
+          <span className="brand-divider" aria-hidden="true" />
           <span className="brand-text">
             <span className="brand-unit">AX금융기획실</span>
             <span className="brand-name">AI담당관<b>3.0</b></span>
