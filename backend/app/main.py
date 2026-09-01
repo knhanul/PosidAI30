@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, defer, selectinload
 
 from .ai_projects_router import router as ai_projects_router
 from .config import get_settings
@@ -368,7 +368,7 @@ def public_posts(
     category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
     home: bool = Query(default=False), db: Session = Depends(get_db),
 ) -> dict:
-    statement = select(Post).options(selectinload(Post.author)).where(Post.status == "published", Post.deleted_at.is_(None))
+    statement = select(Post).options(selectinload(Post.author), defer(Post.body_markdown)).where(Post.status == "published", Post.deleted_at.is_(None))
     if home:
         statement = statement.where(Post.show_on_home.is_(True))
     if category:
