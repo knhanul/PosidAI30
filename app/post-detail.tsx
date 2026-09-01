@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, listPublishedPosts, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
-import { categories, type Post } from "./content";
+import { categories, type CategorySlug, type Post } from "./content";
 import SiteIcon from "./site-icon";
 import UserMenu from "./user-menu";
+
+const topNav: CategorySlug[] = ["news", "learn", "use"];
 
 type KakaoLink = { mobileWebUrl: string; webUrl: string };
 type KakaoSdk = {
@@ -94,9 +96,10 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
 
   return (
     <div className="article-page">
-      <header className="simple-header"><div className="header-inner">
-        <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈"><span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span><span className="brand-divider" /><span className="brand-service">AI담당관 <b>3.0</b></span></Link>
-        <div className="simple-actions"><Link className="header-write-link" href="/write">글쓰기</Link><UserMenu /><Link className="back-link" href="/">홈으로 <SiteIcon name="arrow" size={17} /></Link></div>
+      <header className="site-header"><div className="header-inner">
+        <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈"><span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span></Link>
+        <nav className="post-nav" aria-label="주요 메뉴">{topNav.map((slug) => <Link key={slug} href={`/category/${slug}`}>{categories[slug].label}</Link>)}</nav>
+        <UserMenu />
       </div></header>
 
       <main>
