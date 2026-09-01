@@ -553,3 +553,55 @@ docker compose --env-file .env -f deployment/docker-compose.example.yml up --bui
 curl http://127.0.0.1:8091/api/health
 ```
 
+### 9-5. 서비스별 빠른 빌드
+
+매번 전체 서비스를 빌드할 필요는 없습니다. 무엇이 바뀌었느냐에 따라 해당 서비스만 빌드하면 훨씬 빠르게 반영할 수 있습니다.
+
+Dockerfile은 의존성 설치 단계가 코드 복사 단계보다 앞에 있으므로, `requirements.txt`나 `package.json`이 바뀌지 않으면 의존성 설치는 캐시되어 생략됩니다. 실제 빌드는 코드 복사 + 컴파일만 수행됩니다.
+
+#### 백엔드 코드만 바뀐 경우 (가장 흔함)
+
+```bash
+cd /opt/posid-ai30
+git pull origin main
+docker compose --env-file .env -f deployment/docker-compose.example.yml build backend
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d backend
+curl http://127.0.0.1:8091/api/health
+```
+
+#### 프론트엔드만 바뀐 경우 (CSS, 컴포넌트)
+
+```bash
+cd /opt/posid-ai30
+git pull origin main
+docker compose --env-file .env -f deployment/docker-compose.example.yml build frontend
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d frontend
+```
+
+#### DB 마이그레이션이 추가된 경우
+
+마이그레이션은 백엔드 컨테이너 시작 시 자동 실행되므로 백엔드 재빌드만 하면 됩니다 (백엔드 항목과 동일).
+
+#### 의존성이 바뀐 경우 (requirements.txt, package.json)
+
+이때만 전체 빌드가 필요합니다.
+
+```bash
+cd /opt/posid-ai30
+git pull origin main
+docker compose --env-file .env -f deployment/docker-compose.example.yml build
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d --remove-orphans
+```
+
+#### 빌드 시간 참고
+
+| 변경 내용 | 빌드 대상 | 예상 소요 시간 |
+|-----------|----------|---------------|
+| 백엔드 Python 코드 | `build backend` | ~5초 |
+| 프론트엔드 코드/CSS | `build frontend` | ~8초 |
+| requirements.txt | `build backend` | ~30초 (pip 재설치) |
+| package.json | `build frontend` | ~30초 (npm 재설치) |
+| 백엔드+프론트엔드 모두 | `build` (전체) | ~35초 |
+
+> `config -q`는 설정 검증용이므로 평소에는 생략해도 됩니다. `--remove-orphans`는 서비스 구성이 바뀐 경우에만 의미가 있습니다.
+
