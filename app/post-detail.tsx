@@ -43,7 +43,8 @@ function formatBytes(size: number) {
 
 export default function PostDetail({ slug, fallback }: { slug: string; fallback?: Post }) {
   const [post, setPost] = useState<Post | undefined>(fallback);
-  const [error, setError] = useState(!fallback);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [community, setCommunity] = useState({ likes: 0, liked: false, bookmarked: false });
@@ -56,7 +57,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   useEffect(() => {
     getMe().then(setAuth).catch(() => setAuth(null));
     getPublicConfig().then((config) => setKakaoKey(config.kakao_javascript_key)).catch(() => {});
-    getPublishedPost(slug).then((item) => { setPost(item); setError(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); listPublishedPosts({ category: item.category }).then((data) => setRelated(data.filter((p) => p.slug !== item.slug).slice(0, 2))).catch(() => setRelated([])); }).catch((err: Error & { status?: number }) => { if (err?.status === 401) { setNeedLogin(true); setError(false); } else { setError(!fallback); } });
+    getPublishedPost(slug).then((item) => { setPost(item); setError(false); setLoading(false); getCommunity(slug).then(setCommunity).catch(() => {}); if (item.id) listComments(item.id).then(setComments).catch(() => {}); listPublishedPosts({ category: item.category }).then((data) => setRelated(data.filter((p) => p.slug !== item.slug).slice(0, 2))).catch(() => setRelated([])); }).catch((err: Error & { status?: number }) => { if (err?.status === 401) { setNeedLogin(true); setError(false); } else { setError(true); } setLoading(false); });
   }, [fallback, slug]);
 
   async function react(kind: "like" | "bookmark") {
@@ -88,7 +89,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
     }
   }
 
-  if (!post) return <main className="load-state"><strong>{needLogin ? "로그인이 필요합니다." : error ? "글을 찾을 수 없습니다." : "글을 불러오고 있습니다."}</strong>{needLogin ? <a className="primary-button" href="/api/auth/kakao/login">카카오로 로그인하기</a> : <Link href="/">홈으로 돌아가기</Link>}</main>;
+  if (!post) return <main className="load-state"><strong>{needLogin ? "로그인이 필요합니다." : loading ? "글을 불러오고 있습니다." : error ? "글을 찾을 수 없습니다." : "글을 불러오고 있습니다."}</strong>{needLogin ? <a className="primary-button" href="/api/auth/kakao/login">카카오로 로그인하기</a> : <Link href="/">홈으로 돌아가기</Link>}</main>;
   const category = categories[post.category];
 
   return (
