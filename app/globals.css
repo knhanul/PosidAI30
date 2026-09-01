@@ -31,7 +31,10 @@ img { max-width: 100%; display: block; }
 .brand-divider { width: 1px; height: 26px; background: #d9d5d0; margin: 0 15px; }
 .brand-service { font-size: 16px; font-weight: 700; letter-spacing: -.04em; white-space: nowrap; }
 .brand-service b { color: var(--orange); }
-.brand-title { display: none; }
+.brand-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
+.brand-unit { font-size: 12px; font-weight: 700; color: #6d6864; letter-spacing: -.01em; white-space: nowrap; }
+.brand-name { font-size: 18px; font-weight: 900; letter-spacing: -.04em; color: var(--ink); white-space: nowrap; }
+.brand-name b { color: var(--orange); }
 .desktop-nav { margin-left: auto; display: flex; align-items: center; gap: 31px; font-size: 15px; font-weight: 700; }
 .desktop-nav a { position: relative; padding: 27px 0 25px; }
 .desktop-nav a::after { content: ""; position: absolute; left: 50%; bottom: 18px; width: 0; height: 2px; background: var(--orange); transition: .2s; }
@@ -377,7 +380,10 @@ img { max-width: 100%; display: block; }
   .desktop-nav { display: none; }.header-search-link { margin-left: auto; }.write-page { padding: 22px 16px 55px; }.write-layout { grid-template-columns: 1fr; }.write-preview { position: static; order: 2; }.write-form { padding: 22px 17px; }.write-head { align-items: stretch; flex-direction: column; }.write-head button { align-self: stretch; }.rich-editor-toolbar button:nth-child(n+9) { display: none; }.rich-editor-content { min-height: 300px; padding: 14px; }.feature-content { grid-template-columns: 1fr 36%; gap: 24px; padding: 28px; }.latest-grid { grid-template-columns: 1fr; }
   .site-header .header-write-link { display: none; }
   .site-header .brand-service, .site-header .brand-divider { display: none; }
-  .brand-title { display: inline-block; font-size: 16px; font-weight: 900; letter-spacing: -.05em; color: var(--ink); white-space: nowrap; }
+  .brand-text { gap: 0; }
+  .brand-unit { display: none; }
+  .brand-name { font-size: 16px; font-weight: 900; letter-spacing: -.05em; }
+  .brand-name b { display: none; }
   .post-nav { gap: 18px; font-size: 13px; }
   .post-nav .nav-together { display: none; }
   .mobile-nav { display: flex; justify-content: space-around; width: 100%; gap: 0; padding: 0 16px 13px; font-size: 14px; font-weight: 800; border-bottom: 1px solid var(--line); }.mobile-nav a { white-space: nowrap; flex: 1; text-align: center; padding: 8px 0; }
