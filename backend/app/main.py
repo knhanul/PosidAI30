@@ -23,7 +23,7 @@ from .config import get_settings
 from .database import get_db
 from .models import AdminSession, AdminUser, Attachment, AuditLog, AuthIdentity, Bookmark, Comment, OAuthState, Post, PostLike, utcnow
 from .schemas import CommentInput, DisplayNameInput, LoginRequest, PostInput
-from .security import create_session, get_current_session, hash_password, require_admin, require_admin_csrf, require_confirmed, require_confirmed_csrf, require_csrf, token_digest, verify_password
+from .security import create_session, get_current_session, get_optional_session, hash_password, require_admin, require_admin_csrf, require_confirmed, require_confirmed_csrf, require_csrf, token_digest, verify_password
 from .webdav import safe_filename, storage
 
 
@@ -383,11 +383,11 @@ def public_posts(
 
 
 @app.get("/api/posts/{slug}")
-def public_post(slug: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
+def public_post(slug: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
     item = db.scalar(select(Post).options(selectinload(Post.attachments), selectinload(Post.author)).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
-    return post_payload(item, owned_by_current_user=bool(session.user_id == item.author_id))
+    return post_payload(item, owned_by_current_user=bool(session and session.user_id == item.author_id))
 
 
 def get_public_post_by_id(post_id: uuid.UUID, db: Session) -> Post:
@@ -398,11 +398,11 @@ def get_public_post_by_id(post_id: uuid.UUID, db: Session) -> Post:
 
 
 @app.get("/api/posts/{slug}/community")
-def community_status(slug: str, session: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
+def community_status(slug: str, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
     post = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not post:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
-    return {"likes": db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post.id)) or 0, "liked": bool(db.get(PostLike, (post.id, session.user_id))), "bookmarked": bool(db.get(Bookmark, (post.id, session.user_id)))}
+    return {"likes": db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post.id)) or 0, "liked": bool(session and db.get(PostLike, (post.id, session.user_id))), "bookmarked": bool(session and db.get(Bookmark, (post.id, session.user_id)))}
 
 
 @app.post("/api/posts/{post_id}/like")
@@ -436,7 +436,7 @@ def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_
 
 
 @app.get("/api/posts/{post_id}/comments")
-def list_comments(post_id: uuid.UUID, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> dict:
+def list_comments(post_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)
     items = db.scalars(select(Comment).options(selectinload(Comment.user)).where(Comment.post_id == post_id).order_by(Comment.created_at.asc())).all()
     return {"items": [{"id": str(item.id), "body": item.body, "author_name": item.user.display_name, "created_at": item.created_at} for item in items]}
@@ -461,7 +461,7 @@ def upload_new_post_inline_image(file: UploadFile = File(...), session: AdminSes
 
 
 @app.get("/api/inline-images/{user_id}/{filename}")
-def public_new_post_inline_image(user_id: int, filename: str, _: AdminSession = Depends(get_current_session)) -> StreamingResponse:
+def public_new_post_inline_image(user_id: int, filename: str) -> StreamingResponse:
     safe_name = safe_filename(filename)
     content_type = "image/webp" if safe_name.lower().endswith(".webp") else "image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     return file_response(f"{settings.webdav_root.strip('/')}/inline-images/{user_id}/{safe_name}", content_type)
@@ -482,7 +482,7 @@ def upload_inline_image(post_id: uuid.UUID, file: UploadFile = File(...), sessio
 
 
 @app.get("/api/posts/{slug}/inline-images/{filename}")
-def public_inline_image(slug: str, filename: str, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def public_inline_image(slug: str, filename: str, db: Session = Depends(get_db)) -> StreamingResponse:
     item = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
@@ -500,7 +500,7 @@ def public_thumbnail(slug: str, db: Session = Depends(get_db)) -> StreamingRespo
 
 
 @app.get("/api/attachments/{attachment_id}/download")
-def public_attachment(attachment_id: uuid.UUID, _: AdminSession = Depends(get_current_session), db: Session = Depends(get_db)) -> StreamingResponse:
+def public_attachment(attachment_id: uuid.UUID, db: Session = Depends(get_db)) -> StreamingResponse:
     item = db.scalar(select(Attachment).join(Post).where(Attachment.id == attachment_id, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="첨부파일을 찾을 수 없습니다.")
