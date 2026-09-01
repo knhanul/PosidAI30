@@ -25,7 +25,7 @@ img { max-width: 100%; display: block; }
 
 .site-header, .simple-header { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
 .header-inner { width: min(1240px, calc(100% - 48px)); min-height: 76px; margin: auto; display: flex; align-items: center; gap: 36px; }
-.brand { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.brand { display: inline-flex; align-items: center; flex: 0 0 auto; cursor: pointer; text-decoration: none; color: inherit; }
 .brand-logo-wrap { width: 112px; height: 42px; display: flex; align-items: center; overflow: hidden; }
 .brand-logo-wrap img { width: 112px; height: auto; }
 .brand-divider { width: 1px; height: 26px; background: #d9d5d0; margin: 0 15px; }
@@ -244,7 +244,7 @@ img { max-width: 100%; display: block; }
 /* 관리자 */
 .admin-shell, .admin-login-page { min-height: 100vh; background: #f4f2ef; }
 .admin-header { height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid #e3dfda; background: white; }
-.admin-logo, .admin-login-brand { display: inline-flex; align-items: center; gap: 14px; font-weight: 800; letter-spacing: -.03em; }
+.admin-logo, .admin-login-brand { display: inline-flex; align-items: center; gap: 14px; font-weight: 800; letter-spacing: -.03em; cursor: pointer; text-decoration: none; color: inherit; }
 .admin-logo img, .admin-login-brand img { width: 92px; }
 .admin-logo b, .admin-login-brand b { color: var(--orange); }
 .admin-header > div { display: flex; align-items: center; gap: 18px; color: #6d6864; font-size: 12px; font-weight: 700; }
