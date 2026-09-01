@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listPublishedPosts } from "./api-client";
 import { categories, type CategorySlug, type Post } from "./content";
+import SiteHeader from "./site-header";
 import SiteIcon from "./site-icon";
-import UserMenu from "./user-menu";
 
 export default function CategoryList({ slug, fallback }: { slug: CategorySlug; fallback: Post[] }) {
   const [items, setItems] = useState(fallback);
@@ -16,10 +16,7 @@ export default function CategoryList({ slug, fallback }: { slug: CategorySlug; f
 
   return (
     <div className="category-page">
-      <header className="simple-header"><div className="header-inner">
-        <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈"><span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span><span className="brand-divider" /><span className="brand-service">AI담당관 <b>3.0</b></span></Link>
-        <div className="simple-actions"><Link className="header-write-link" href={`/write?category=${slug}`}>이 카테고리 글쓰기</Link><UserMenu /><Link className="back-link" href="/">홈으로 <SiteIcon name="arrow" size={17} /></Link></div>
-      </div></header>
+      <SiteHeader />
       <main>
         <section className={`category-hero category-hero-${category.tone}`}><div className="category-hero-inner"><span className="category-hero-icon"><SiteIcon name={icon} size={32} /></span><span>{category.eyebrow}</span><h1>{category.label}</h1><p>{category.description}</p></div></section>
         <section className="category-list">
