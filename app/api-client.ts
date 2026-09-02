@@ -126,13 +126,19 @@ export function toPublicPost(post: ApiPost): Post {
   };
 }
 
-export async function listPublishedPosts(params: { category?: string; query?: string; homeOnly?: boolean } = {}) {
+export type PostListPage = { items: Post[]; page: number; hasMore: boolean };
+export async function listPublishedPostPage(params: { category?: string; query?: string; homeOnly?: boolean; page?: number; pageSize?: number } = {}): Promise<PostListPage> {
   const query = new URLSearchParams();
   if (params.category) query.set("category", params.category);
   if (params.query) query.set("q", params.query);
   if (params.homeOnly) query.set("home", "true");
-  const data = await apiFetch<{ items: ApiPost[] }>(`/api/posts${query.size ? `?${query}` : ""}`);
-  return data.items.map(toPublicPost);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  const data = await apiFetch<{ items: ApiPost[]; page: number; has_more: boolean }>(`/api/posts${query.size ? `?${query}` : ""}`);
+  return { items: data.items.map(toPublicPost), page: data.page, hasMore: data.has_more };
+}
+export async function listPublishedPosts(params: { category?: string; query?: string; homeOnly?: boolean } = {}) {
+  return (await listPublishedPostPage(params)).items;
 }
 
 export async function getPublishedPost(slug: string) { return toPublicPost(await apiFetch<ApiPost>(`/api/posts/${encodeURIComponent(slug)}`)); }

@@ -164,7 +164,13 @@ class WebDAVStorage(StorageBase):
         if not self.settings.webdav_verify_tls:
             tls_context.check_hostname = False
             tls_context.verify_mode = ssl.CERT_NONE
-        return httpx.Client(auth=httpx.DigestAuth(self.settings.webdav_username, self.settings.webdav_password), verify=tls_context, timeout=self.settings.webdav_timeout_seconds, follow_redirects=True, trust_env=False)
+        timeout = httpx.Timeout(
+            connect=self.settings.webdav_connect_timeout_seconds,
+            read=self.settings.webdav_timeout_seconds,
+            write=self.settings.webdav_write_timeout_seconds,
+            pool=self.settings.webdav_connect_timeout_seconds,
+        )
+        return httpx.Client(auth=httpx.DigestAuth(self.settings.webdav_username, self.settings.webdav_password), verify=tls_context, timeout=timeout, follow_redirects=True, trust_env=False)
 
     def _url(self, path: str = "") -> str:
         encoded = "/".join(quote(part, safe="") for part in self.rooted(path).split("/") if part)

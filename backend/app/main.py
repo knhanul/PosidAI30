@@ -56,7 +56,7 @@ def attachment_payload(item: Attachment) -> dict:
 def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = False) -> dict:
     thumbnail_url = None
     if item.thumbnail_type == "webdav" and item.thumbnail_path:
-        thumbnail_url = f"/api/admin/posts/{item.id}/thumbnail" if admin else f"/api/posts/{quote(item.slug)}/thumbnail"
+        thumbnail_url = f"/api/admin/posts/{item.id}/thumbnail" if admin else f"/api/posts/{quote(item.slug)}/thumbnail?v={int(item.updated_at.timestamp())}"
     return {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
         "body_markdown": item.body_markdown, "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
@@ -70,7 +70,7 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
 def post_summary_payload(item: Post, owned_by_current_user: bool = False, like_count: int = 0, comment_count: int = 0) -> dict:
     thumbnail_url = None
     if item.thumbnail_type == "webdav" and item.thumbnail_path:
-        thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail"
+        thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail?v={int(item.updated_at.timestamp())}"
     return {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
         "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
@@ -143,8 +143,8 @@ def assert_upload_size(file: UploadFile, maximum_mb: int) -> int:
     return size
 
 
-def file_response(storage_path: str, content_type: str, filename: str | None = None) -> StreamingResponse:
-    headers = {"Cache-Control": "private, max-age=300"}
+def file_response(storage_path: str, content_type: str, filename: str | None = None, cache_control: str = "private, max-age=300") -> StreamingResponse:
+    headers = {"Cache-Control": cache_control}
     if filename:
         headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(safe_filename(filename))}"
     return StreamingResponse(storage.stream(storage_path), media_type=content_type, headers=headers)
@@ -367,7 +367,7 @@ def revoke_user_sessions(user_id: int, _: AdminSession = Depends(require_admin_c
 @app.get("/api/posts")
 def public_posts(
     category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
-    home: bool = Query(default=False), db: Session = Depends(get_db),
+    home: bool = Query(default=False), page: int = Query(default=1, ge=1), page_size: int = Query(default=24, ge=1, le=100), db: Session = Depends(get_db),
 ) -> dict:
     statement = select(Post).options(selectinload(Post.author), defer(Post.body_markdown)).where(Post.status == "published", Post.deleted_at.is_(None))
     if home:
@@ -379,14 +379,16 @@ def public_posts(
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         statement = statement.where(or_(Post.title.ilike(pattern), Post.summary.ilike(pattern), Post.body_markdown.ilike(pattern)))
-    statement = statement.order_by(Post.published_at.desc().nullslast(), Post.created_at.desc()).limit(200)
+    statement = statement.order_by(Post.published_at.desc().nullslast(), Post.created_at.desc()).offset((page - 1) * page_size).limit(page_size + 1)
     posts = db.scalars(statement).all()
+    has_more = len(posts) > page_size
+    posts = posts[:page_size]
     if not posts:
-        return {"items": []}
+        return {"items": [], "page": page, "has_more": False}
     post_ids = [p.id for p in posts]
     like_counts = dict(db.execute(select(PostLike.post_id, func.count()).where(PostLike.post_id.in_(post_ids)).group_by(PostLike.post_id)).all())
     comment_counts = dict(db.execute(select(Comment.post_id, func.count()).where(Comment.post_id.in_(post_ids)).group_by(Comment.post_id)).all())
-    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0)) for item in posts]}
+    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0)) for item in posts], "page": page, "has_more": has_more}
 
 
 @app.get("/api/posts/{slug}")
@@ -532,7 +534,7 @@ def public_thumbnail(slug: str, db: Session = Depends(get_db)) -> StreamingRespo
     item = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item or not item.thumbnail_path:
         raise HTTPException(status_code=404, detail="대표 이미지를 찾을 수 없습니다.")
-    return file_response(item.thumbnail_path, item.thumbnail_content_type or "image/jpeg")
+    return file_response(item.thumbnail_path, item.thumbnail_content_type or "image/jpeg", cache_control="public, max-age=31536000, immutable")
 
 
 @app.get("/api/attachments/{attachment_id}/download")

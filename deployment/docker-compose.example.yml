@@ -17,6 +17,11 @@ services:
       timeout: 5s
       retries: 10
     networks: [app_internal]
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
@@ -32,6 +37,7 @@ services:
       timeout: 5s
       retries: 10
     networks: [app_internal]
+    logging: *default-logging
 
   frontend:
     build:
@@ -46,6 +52,7 @@ services:
       timeout: 5s
       retries: 10
     networks: [app_internal]
+    logging: *default-logging
 
   gateway:
     image: nginx:1.27-alpine
@@ -60,6 +67,7 @@ services:
     volumes:
       - ./nginx-internal.conf:/etc/nginx/conf.d/default.conf:ro
     networks: [app_internal]
+    logging: *default-logging
 
 networks:
   app_internal:

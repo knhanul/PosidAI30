@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     postgres_db: str = "posid_ai30"
     postgres_host: str = "db"
     postgres_port: int = 5432
+    database_pool_size: int = 3
+    database_max_overflow: int = 2
+    database_pool_timeout_seconds: int = 10
     allowed_origins: str = ""
 
     kakao_rest_api_key: str = ""
@@ -44,6 +47,8 @@ class Settings(BaseSettings):
     webdav_root: str = "AI담당관3.0"
     webdav_verify_tls: bool = True
     webdav_timeout_seconds: float = 60.0
+    webdav_connect_timeout_seconds: float = 5.0
+    webdav_write_timeout_seconds: float = 3600.0
     max_thumbnail_mb: int = 10
     max_attachment_mb: int = 100
     max_project_file_mb: int = 2048
