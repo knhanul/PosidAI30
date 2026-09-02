@@ -380,11 +380,11 @@ img { max-width: 100%; display: block; }
   .desktop-nav { display: none; }.header-search-link { margin-left: auto; }.write-page { padding: 22px 16px 55px; }.write-layout { grid-template-columns: 1fr; }.write-preview { position: static; order: 2; }.write-form { padding: 22px 17px; }.write-head { align-items: stretch; flex-direction: column; }.write-head button { align-self: stretch; }.rich-editor-toolbar button:nth-child(n+9) { display: none; }.rich-editor-content { min-height: 300px; padding: 14px; }.feature-content { grid-template-columns: 1fr 36%; gap: 24px; padding: 28px; }.latest-grid { grid-template-columns: 1fr; }
   .site-header .header-write-link { display: none; }
   .site-header .brand-service, .site-header .brand-divider { display: none; }
-  .brand-text { gap: 0; line-height: 1.15; }
-  .site-header .brand-divider { height: 22px; margin: 0 10px; }
-  .brand-unit { display: block; font-size: 11px; font-weight: 800; }
-  .brand-name { display: block; font-size: 13px; font-weight: 800; }
-  .brand-name b { display: none; }
+  .brand-text { gap: 0; line-height: 1.1; }
+  .site-header .brand-divider { height: 18px; margin: 0 8px; }
+  .brand-unit { display: block; font-size: 9px; font-weight: 700; color: #a29b95; }
+  .brand-name { display: block; font-size: 10px; font-weight: 700; color: #a29b95; }
+  .brand-name b { color: #a29b95; }
   .post-nav { gap: 18px; font-size: 13px; }
   .post-nav .nav-together { display: none; }
   .mobile-nav { display: flex; justify-content: space-around; width: 100%; gap: 0; padding: 0 16px 13px; font-size: 14px; font-weight: 800; border-bottom: 1px solid var(--line); }.mobile-nav a { white-space: nowrap; flex: 1; text-align: center; padding: 8px 0; }
