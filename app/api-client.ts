@@ -33,6 +33,8 @@ export type ApiPost = {
   show_on_home: boolean;
   attachments?: ApiAttachment[];
   owned_by_current_user: boolean;
+  like_count?: number;
+  comment_count?: number;
 };
 
 export type AdminUser = { id: number; username: string; display_name: string; display_name_confirmed: boolean; role: "admin" | "user" };
@@ -120,6 +122,7 @@ export function toPublicPost(post: ApiPost): Post {
     thumbnailUrl: post.thumbnail_url, bodyMarkdown: body, contentFormat: post.content_format, contentDensity: post.content_density === "compact" ? "compact" : "normal", bodyHtml: post.content_format === "html" ? body : undefined, body: markdownToBlocks(body),
     attachments: (post.attachments ?? []).map((file) => ({ id: file.id, filename: file.filename, size: file.size, downloadUrl: file.download_url })),
     service: post.category === "together" ? { status: post.service_status === "사용 가능" ? "사용 가능" : "준비 중", audience: post.service_audience ?? "모든 구성원", actionLabel: "서비스 써보기", actionHref: post.service_url ?? "#service-guide" } : undefined,
+    likeCount: post.like_count ?? 0, commentCount: post.comment_count ?? 0,
   };
 }
 

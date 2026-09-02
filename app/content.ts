@@ -34,6 +34,8 @@ export type Post = {
     actionLabel: string;
     actionHref: string;
   };
+  likeCount?: number;
+  commentCount?: number;
   body: ContentBlock[];
 };
 

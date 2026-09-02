@@ -67,7 +67,7 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
     }
 
 
-def post_summary_payload(item: Post, owned_by_current_user: bool = False) -> dict:
+def post_summary_payload(item: Post, owned_by_current_user: bool = False, like_count: int = 0, comment_count: int = 0) -> dict:
     thumbnail_url = None
     if item.thumbnail_type == "webdav" and item.thumbnail_path:
         thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail"
@@ -77,6 +77,7 @@ def post_summary_payload(item: Post, owned_by_current_user: bool = False) -> dic
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at, "published_at": item.published_at,
+        "like_count": like_count, "comment_count": comment_count,
     }
 
 
@@ -379,7 +380,13 @@ def public_posts(
         pattern = f"%{q.strip()}%"
         statement = statement.where(or_(Post.title.ilike(pattern), Post.summary.ilike(pattern), Post.body_markdown.ilike(pattern)))
     statement = statement.order_by(Post.published_at.desc().nullslast(), Post.created_at.desc()).limit(200)
-    return {"items": [post_summary_payload(item) for item in db.scalars(statement).all()]}
+    posts = db.scalars(statement).all()
+    if not posts:
+        return {"items": []}
+    post_ids = [p.id for p in posts]
+    like_counts = dict(db.execute(select(PostLike.post_id, func.count()).where(PostLike.post_id.in_(post_ids)).group_by(PostLike.post_id)).all())
+    comment_counts = dict(db.execute(select(Comment.post_id, func.count()).where(Comment.post_id.in_(post_ids)).group_by(Comment.post_id)).all())
+    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0)) for item in posts]}
 
 
 @app.get("/api/posts/{slug}")
