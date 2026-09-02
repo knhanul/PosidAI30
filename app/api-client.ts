@@ -144,7 +144,7 @@ export async function createPublicPost(payload: PostPayload, csrf: string) { ret
 export async function getUserPostForEdit(id: string) { return apiFetch<ApiPost>(`/api/posts/${id}/edit`); }
 export async function updatePublicPost(id: string, payload: PostPayload, csrf: string) { return apiFetch<ApiPost>(`/api/posts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) }); }
 export async function getCommunity(slug: string) { return apiFetch<{ likes: number; liked: boolean; bookmarked: boolean }>(`/api/posts/${encodeURIComponent(slug)}/community`); }
-export async function toggleLike(id: string, csrf: string, liked: boolean) { return apiFetch<{ liked: boolean }>(`/api/posts/${id}/like`, { method: liked ? "DELETE" : "POST", headers: { "X-CSRF-Token": csrf } }); }
+export async function toggleLike(id: string, csrf: string, liked: boolean) { return apiFetch<{ liked: boolean; likes: number }>(`/api/posts/${id}/like`, { method: liked ? "DELETE" : "POST", headers: { "X-CSRF-Token": csrf } }); }
 export async function toggleBookmark(id: string, csrf: string, bookmarked: boolean) { return apiFetch<{ bookmarked: boolean }>(`/api/posts/${id}/bookmark`, { method: bookmarked ? "DELETE" : "POST", headers: { "X-CSRF-Token": csrf } }); }
 export type Comment = { id: string; body: string; author_name: string; created_at: string };
 export async function listComments(id: string) { return (await apiFetch<{ items: Comment[] }>(`/api/posts/${id}/comments`)).items; }

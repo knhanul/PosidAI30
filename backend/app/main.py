@@ -410,14 +410,17 @@ def like_post(post_id: uuid.UUID, session: AdminSession = Depends(require_confir
     get_public_post_by_id(post_id, db)
     if not db.get(PostLike, (post_id, session.user_id)):
         db.add(PostLike(post_id=post_id, user_id=session.user_id)); db.commit()
-    return {"liked": True}
+    count = db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post_id)) or 0
+    return {"liked": True, "likes": count}
 
 
-@app.delete("/api/posts/{post_id}/like", status_code=204)
-def unlike_post(post_id: uuid.UUID, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> None:
+@app.delete("/api/posts/{post_id}/like")
+def unlike_post(post_id: uuid.UUID, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)
     item = db.get(PostLike, (post_id, session.user_id))
     if item: db.delete(item); db.commit()
+    count = db.scalar(select(func.count()).select_from(PostLike).where(PostLike.post_id == post_id)) or 0
+    return {"liked": False, "likes": count}
 
 
 @app.post("/api/posts/{post_id}/bookmark")
@@ -428,11 +431,12 @@ def bookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_co
     return {"bookmarked": True}
 
 
-@app.delete("/api/posts/{post_id}/bookmark", status_code=204)
-def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> None:
+@app.delete("/api/posts/{post_id}/bookmark")
+def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)
     item = db.get(Bookmark, (post_id, session.user_id))
     if item: db.delete(item); db.commit()
+    return {"bookmarked": False}
 
 
 @app.get("/api/posts/{post_id}/comments")

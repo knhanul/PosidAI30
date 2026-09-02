@@ -63,8 +63,17 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   async function react(kind: "like" | "bookmark") {
     if (!auth || !post?.id) return;
     const current = kind === "like" ? community.liked : community.bookmarked;
-    if (kind === "like") await toggleLike(post.id, auth.csrf_token, current); else await toggleBookmark(post.id, auth.csrf_token, current);
-    setCommunity((state) => kind === "like" ? { ...state, liked: !current, likes: state.likes + (current ? -1 : 1) } : { ...state, bookmarked: !current });
+    try {
+      if (kind === "like") {
+        const result = await toggleLike(post.id, auth.csrf_token, current);
+        setCommunity((state) => ({ ...state, liked: result.liked, likes: result.likes }));
+      } else {
+        const result = await toggleBookmark(post.id, auth.csrf_token, current);
+        setCommunity((state) => ({ ...state, bookmarked: result.bookmarked }));
+      }
+    } catch (err) {
+      console.error("react error:", err);
+    }
   }
 
   async function submitComment(event: React.FormEvent) {
