@@ -440,10 +440,10 @@ def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_
 
 
 @app.get("/api/posts/{post_id}/comments")
-def list_comments(post_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+def list_comments(post_id: uuid.UUID, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)
     items = db.scalars(select(Comment).options(selectinload(Comment.user)).where(Comment.post_id == post_id).order_by(Comment.created_at.asc())).all()
-    return {"items": [{"id": str(item.id), "body": item.body, "author_name": item.user.display_name, "created_at": item.created_at} for item in items]}
+    return {"items": [{"id": str(item.id), "body": item.body, "author_name": item.user.display_name, "author_id": item.user_id, "owned_by_current_user": bool(session and session.user_id == item.user_id), "created_at": item.created_at} for item in items]}
 
 
 @app.post("/api/posts/{post_id}/comments", status_code=201)
@@ -452,6 +452,31 @@ def create_comment(post_id: uuid.UUID, data: CommentInput, session: AdminSession
     item = Comment(post_id=post_id, user_id=session.user_id, body=data.body.strip())
     db.add(item); db.commit(); db.refresh(item)
     return {"id": str(item.id), "body": item.body, "author_name": session.user.display_name, "created_at": item.created_at}
+
+
+@app.put("/api/posts/{post_id}/comments/{comment_id}")
+def update_comment(post_id: uuid.UUID, comment_id: uuid.UUID, data: CommentInput, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
+    get_public_post_by_id(post_id, db)
+    item = db.get(Comment, comment_id)
+    if not item or item.post_id != post_id:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    if item.user_id != session.user_id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 댓글만 수정할 수 있습니다.")
+    item.body = data.body.strip()
+    db.commit(); db.refresh(item)
+    return {"id": str(item.id), "body": item.body, "author_name": session.user.display_name, "created_at": item.created_at}
+
+
+@app.delete("/api/posts/{post_id}/comments/{comment_id}")
+def delete_comment(post_id: uuid.UUID, comment_id: uuid.UUID, session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
+    get_public_post_by_id(post_id, db)
+    item = db.get(Comment, comment_id)
+    if not item or item.post_id != post_id:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    if item.user_id != session.user_id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 댓글만 삭제할 수 있습니다.")
+    db.delete(item); db.commit()
+    return {"deleted": True}
 
 
 @app.post("/api/inline-images")

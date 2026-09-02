@@ -146,9 +146,11 @@ export async function updatePublicPost(id: string, payload: PostPayload, csrf: s
 export async function getCommunity(slug: string) { return apiFetch<{ likes: number; liked: boolean; bookmarked: boolean }>(`/api/posts/${encodeURIComponent(slug)}/community`); }
 export async function toggleLike(id: string, csrf: string, liked: boolean) { return apiFetch<{ liked: boolean; likes: number }>(`/api/posts/${id}/like`, { method: liked ? "DELETE" : "POST", headers: { "X-CSRF-Token": csrf } }); }
 export async function toggleBookmark(id: string, csrf: string, bookmarked: boolean) { return apiFetch<{ bookmarked: boolean }>(`/api/posts/${id}/bookmark`, { method: bookmarked ? "DELETE" : "POST", headers: { "X-CSRF-Token": csrf } }); }
-export type Comment = { id: string; body: string; author_name: string; created_at: string };
+export type Comment = { id: string; body: string; author_name: string; author_id?: number; owned_by_current_user?: boolean; created_at: string };
 export async function listComments(id: string) { return (await apiFetch<{ items: Comment[] }>(`/api/posts/${id}/comments`)).items; }
 export async function createComment(id: string, body: string, csrf: string) { return apiFetch<Comment>(`/api/posts/${id}/comments`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ body }) }); }
+export async function updateComment(postId: string, commentId: string, body: string, csrf: string) { return apiFetch<Comment>(`/api/posts/${postId}/comments/${commentId}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ body }) }); }
+export async function deleteComment(postId: string, commentId: string, csrf: string) { return apiFetch<{ deleted: boolean }>(`/api/posts/${postId}/comments/${commentId}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
 export async function updatePost(id: string, payload: PostPayload, csrf: string) { return apiFetch<ApiPost>(`/api/admin/posts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) }); }
 export async function deletePost(id: string, csrf: string) { return apiFetch<void>(`/api/admin/posts/${id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
 export async function setFeatured(id: string, csrf: string) { return apiFetch<ApiPost>(`/api/admin/posts/${id}/featured`, { method: "PUT", headers: { "X-CSRF-Token": csrf } }); }

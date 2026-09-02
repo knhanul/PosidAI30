@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, listPublishedPosts, toggleBookmark, toggleLike, type AuthState, type Comment } from "./api-client";
+import { createComment, deleteComment, getCommunity, getMe, getPublicConfig, getPublishedPost, listComments, listPublishedPosts, toggleBookmark, toggleLike, updateComment, type AuthState, type Comment } from "./api-client";
 import { categories, type Post } from "./content";
 import SiteHeader from "./site-header";
 import SiteIcon from "./site-icon";
@@ -50,6 +50,8 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
   const [community, setCommunity] = useState({ likes: 0, liked: false, bookmarked: false });
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
   const [kakaoKey, setKakaoKey] = useState("");
   const [sharing, setSharing] = useState(false);
   const [related, setRelated] = useState<Post[]>([]);
@@ -78,7 +80,37 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
 
   async function submitComment(event: React.FormEvent) {
     event.preventDefault(); if (!auth || !post?.id || !commentBody.trim()) return;
-    const created = await createComment(post.id, commentBody, auth.csrf_token); setComments((items) => [...items, created]); setCommentBody("");
+    try {
+      const created = await createComment(post.id, commentBody, auth.csrf_token);
+      setComments((items) => [...items, { ...created, owned_by_current_user: true }]);
+      setCommentBody("");
+    } catch (err) { console.error("create comment error:", err); }
+  }
+
+  function startEdit(comment: Comment) {
+    setEditingId(comment.id); setEditBody(comment.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null); setEditBody("");
+  }
+
+  async function saveEdit(commentId: string) {
+    if (!auth || !post?.id || !editBody.trim()) return;
+    try {
+      const updated = await updateComment(post.id, commentId, editBody, auth.csrf_token);
+      setComments((items) => items.map((item) => item.id === commentId ? { ...item, body: updated.body } : item));
+      setEditingId(null); setEditBody("");
+    } catch (err) { console.error("update comment error:", err); }
+  }
+
+  async function removeComment(commentId: string) {
+    if (!auth || !post?.id) return;
+    if (!confirm("댓글을 삭제하시겠습니까?")) return;
+    try {
+      await deleteComment(post.id, commentId, auth.csrf_token);
+      setComments((items) => items.filter((item) => item.id !== commentId));
+    } catch (err) { console.error("delete comment error:", err); }
   }
 
   async function shareToKakao() {
@@ -128,7 +160,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
           {!post.id && <aside className="sample-note"><strong>콘텐츠 안내</strong><p>이 글은 서비스 화면 구성을 위한 예시입니다. 운영 API가 연결되면 관리자가 게시한 글로 대체됩니다.</p></aside>}
         </article>
 
-        <section className="community-box"><div className="community-actions"><button type="button" onClick={() => react("like")} disabled={!auth}>{community.liked ? "좋아요 취소" : "좋아요"} {community.likes}</button><button type="button" onClick={() => react("bookmark")} disabled={!auth}>{community.bookmarked ? "북마크 해제" : "북마크"}</button><button className="kakao-share-button" type="button" onClick={shareToKakao} disabled={!kakaoKey || sharing} title={!kakaoKey ? "카카오 JavaScript 키 설정이 필요합니다." : undefined}>{sharing ? "공유 준비 중" : "카카오톡 공유"}</button>{!auth && <a className="community-login-hint" href="/api/auth/kakao/login">카카오 로그인 후 이용할 수 있습니다.</a>}</div><h2>댓글</h2><div className="comment-list">{comments.map((item) => <article key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>)}</div>{auth && <form onSubmit={submitComment} className="comment-form"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="댓글을 남겨보세요." maxLength={2000} required /><button className="admin-primary">댓글 작성</button></form>}</section>
+        <section className="community-box"><div className="community-actions"><button type="button" onClick={() => react("like")} disabled={!auth}>{community.liked ? "좋아요 취소" : "좋아요"} {community.likes}</button><button type="button" onClick={() => react("bookmark")} disabled={!auth}>{community.bookmarked ? "북마크 해제" : "북마크"}</button><button className="kakao-share-button" type="button" onClick={shareToKakao} disabled={!kakaoKey || sharing} title={!kakaoKey ? "카카오 JavaScript 키 설정이 필요합니다." : undefined}>{sharing ? "공유 준비 중" : "카카오톡 공유"}</button>{!auth && <a className="community-login-hint" href="/api/auth/kakao/login">카카오 로그인 후 이용할 수 있습니다.</a>}</div><h2>댓글</h2><div className="comment-list">{comments.map((item) => <article key={item.id} className="comment-item"><div className="comment-head"><strong>{item.author_name}</strong>{item.owned_by_current_user && editingId !== item.id && <span className="comment-actions"><button type="button" className="comment-edit-btn" onClick={() => startEdit(item)}>수정</button><button type="button" className="comment-delete-btn" onClick={() => removeComment(item.id)}>삭제</button></span>}</div>{editingId === item.id ? <div className="comment-edit-form"><textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={2000} required /><div className="comment-edit-buttons"><button type="button" className="admin-primary" onClick={() => saveEdit(item.id)}>저장</button><button type="button" className="admin-secondary" onClick={cancelEdit}>취소</button></div></div> : <p>{item.body}</p>}</article>)}</div>{auth && <form onSubmit={submitComment} className="comment-form"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="댓글을 남겨보세요." maxLength={2000} required /><button className="admin-primary">댓글 작성</button></form>}</section>
 
         {related.length > 0 && <section className="related-section"><div className="related-inner">
           <div className="section-heading"><div><span className="section-kicker">RELATED</span><h2>이어 읽기</h2></div><Link href={`/category/${post.category}`}>{category.label} 모두 보기 <SiteIcon name="arrow" size={17} /></Link></div>

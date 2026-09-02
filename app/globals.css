@@ -283,6 +283,16 @@ img { max-width: 100%; display: block; }
 .community-box h2 { margin: 24px 0 12px; font-size: 18px; }
 .comment-list { display: grid; gap: 12px; }
 .comment-list article { padding: 12px; border-radius: 8px; background: #f7f5f2; }
+.comment-item .comment-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.comment-actions { display: inline-flex; gap: 6px; }
+.comment-edit-btn, .comment-delete-btn { padding: 3px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #5f5e63; font-size: 11px; font-weight: 700; cursor: pointer; }
+.comment-edit-btn:hover { border-color: var(--orange); color: var(--orange-dark); }
+.comment-delete-btn:hover { border-color: #d44; color: #d44; }
+.comment-edit-form { margin-top: 6px; display: grid; gap: 8px; }
+.comment-edit-form textarea { min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; resize: vertical; font: inherit; }
+.comment-edit-buttons { display: flex; gap: 8px; }
+.comment-edit-buttons .admin-primary { min-height: 34px; font-size: 12px; }
+.comment-edit-buttons .admin-secondary { min-height: 34px; font-size: 12px; }
 .comment-list p { margin-top: 5px; white-space: pre-wrap; }
 .comment-form textarea { flex: 1; min-height: 70px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; resize: vertical; }
 .kakao-login-button { width: 100%; background: #fee500; color: #191919; box-shadow: none; }
