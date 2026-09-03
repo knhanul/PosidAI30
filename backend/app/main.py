@@ -57,7 +57,7 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
     thumbnail_url = None
     if item.thumbnail_type == "webdav" and item.thumbnail_path:
         thumbnail_url = f"/api/admin/posts/{item.id}/thumbnail" if admin else f"/api/posts/{quote(item.slug)}/thumbnail?v={int(item.updated_at.timestamp())}"
-    return {
+    payload = {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
         "body_markdown": item.body_markdown, "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
@@ -65,6 +65,9 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at,
         "published_at": item.published_at, "attachments": [attachment_payload(file) for file in item.attachments],
     }
+    if admin:
+        payload["view_count"] = item.view_count or 0
+    return payload
 
 
 def post_summary_payload(item: Post, owned_by_current_user: bool = False, like_count: int = 0, comment_count: int = 0) -> dict:
@@ -396,6 +399,8 @@ def public_post(slug: str, session: AdminSession | None = Depends(get_optional_s
     item = db.scalar(select(Post).options(selectinload(Post.attachments), selectinload(Post.author)).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
     if not item:
         raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
+    db.execute(update(Post).where(Post.id == item.id).values(view_count=Post.view_count + 1))
+    db.commit()
     return post_payload(item, owned_by_current_user=bool(session and session.user_id == item.author_id))
 
 

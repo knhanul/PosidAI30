@@ -80,6 +80,7 @@ class Post(Base):
     body_markdown: Mapped[str] = mapped_column(Text)
     content_format: Mapped[str] = mapped_column(String(20), default="markdown", nullable=False)
     content_density: Mapped[str] = mapped_column(String(20), default="normal", server_default="normal", nullable=False)
+    view_count: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)
     topics: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     key_points: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)

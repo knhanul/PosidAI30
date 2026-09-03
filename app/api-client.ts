@@ -35,6 +35,7 @@ export type ApiPost = {
   owned_by_current_user: boolean;
   like_count?: number;
   comment_count?: number;
+  view_count?: number;
 };
 
 export type AdminUser = { id: number; username: string; display_name: string; display_name_confirmed: boolean; role: "admin" | "user" };
