@@ -16,7 +16,7 @@ export default function WritePage() {
   const requestedCategory = params.get("category");
   const initialCategory = requestedCategory && Object.prototype.hasOwnProperty.call(categories, requestedCategory) ? requestedCategory as CategorySlug : "news";
   const [auth, setAuth] = useState<AuthState | null>(null);
-  const [form, setForm] = useState({ category: initialCategory, title: "", summary: "", body: emptyBody, contentDensity: "normal" as "normal" | "compact" });
+  const [form, setForm] = useState({ category: initialCategory, title: "", summary: "", body: emptyBody, contentDensity: "normal" as "normal" | "compact", thumbnailType: "preset" as "preset" | "webdav" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -35,7 +35,7 @@ export default function WritePage() {
         try {
           const post = await getUserPostForEdit(editId);
           if (active) {
-            setForm({ category: post.category, title: post.title, summary: post.summary, body: post.content_format === "html" ? (post.body_markdown ?? "") : `<p>${(post.body_markdown ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>`, contentDensity: post.content_density === "compact" ? "compact" : "normal" });
+            setForm({ category: post.category, title: post.title, summary: post.summary, body: post.content_format === "html" ? (post.body_markdown ?? "") : `<p>${(post.body_markdown ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "</p><p>")}</p>`, contentDensity: post.content_density === "compact" ? "compact" : "normal", thumbnailType: post.thumbnail_type });
             if (post.thumbnail_url) setThumbnailPreview(post.thumbnail_url);
           }
         } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "글을 불러오지 못했습니다."); }
@@ -51,8 +51,10 @@ export default function WritePage() {
     if (file) {
       const url = URL.createObjectURL(file);
       setThumbnailPreview(url);
+      setForm((current) => ({ ...current, thumbnailType: "webdav" }));
     } else if (!editId) {
       setThumbnailPreview(null);
+      setForm((current) => ({ ...current, thumbnailType: "preset" }));
     }
   }
 
@@ -62,7 +64,7 @@ export default function WritePage() {
     if (imageUploading) { setError("이미지 업로드가 끝난 후 저장해 주세요."); return; }
     if (/src=["'](?:data:image|blob:)/i.test(form.body)) { setError("본문 이미지 업로드가 완료되지 않았습니다. 이미지를 다시 삽입해 주세요."); return; }
     setBusy(true); setError(""); setMessage("");
-    const payload: PostPayload = { category: form.category, title: form.title, summary: form.summary, body_markdown: form.body, content_format: "html", content_density: form.contentDensity, topics: [], key_points: [], is_featured: false, show_on_home: true, thumbnail_type: "preset", service_status: null, service_audience: null, service_url: null };
+    const payload: PostPayload = { category: form.category, title: form.title, summary: form.summary, body_markdown: form.body, content_format: "html", content_density: form.contentDensity, topics: [], key_points: [], is_featured: false, show_on_home: true, thumbnail_type: form.thumbnailType, service_status: null, service_audience: null, service_url: null };
     try {
       let saved = editId ? await updatePublicPost(editId, payload, auth.csrf_token) : await createPublicPost(payload, auth.csrf_token);
       if (thumbnail) saved = await uploadPublicThumbnail(saved.id, thumbnail, auth.csrf_token);
