@@ -453,6 +453,33 @@ def unbookmark_post(post_id: uuid.UUID, session: AdminSession = Depends(require_
     return {"bookmarked": False}
 
 
+@app.get("/api/me/bookmarks")
+def my_bookmarks(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=24, ge=1, le=100),
+    session: AdminSession = Depends(require_confirmed),
+    db: Session = Depends(get_db),
+) -> dict:
+    statement = (
+        select(Post)
+        .options(selectinload(Post.author), defer(Post.body_markdown))
+        .join(Bookmark, Bookmark.post_id == Post.id)
+        .where(Bookmark.user_id == session.user_id, Post.status == "published", Post.deleted_at.is_(None))
+        .order_by(Bookmark.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
+    )
+    posts = db.scalars(statement).all()
+    has_more = len(posts) > page_size
+    posts = posts[:page_size]
+    if not posts:
+        return {"items": [], "page": page, "has_more": False}
+    post_ids = [p.id for p in posts]
+    like_counts = dict(db.execute(select(PostLike.post_id, func.count()).where(PostLike.post_id.in_(post_ids)).group_by(PostLike.post_id)).all())
+    comment_counts = dict(db.execute(select(Comment.post_id, func.count()).where(Comment.post_id.in_(post_ids)).group_by(Comment.post_id)).all())
+    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0)) for item in posts], "page": page, "has_more": has_more}
+
+
 @app.get("/api/posts/{post_id}/comments")
 def list_comments(post_id: uuid.UUID, session: AdminSession | None = Depends(get_optional_session), db: Session = Depends(get_db)) -> dict:
     get_public_post_by_id(post_id, db)

@@ -52,6 +52,7 @@ export default function UserMenu({ variant = "header", onAuthChange }: UserMenuP
       <div className="user-menu-panel">
         {auth.requires_display_name && <a href="/account/setup-name">이름 설정</a>}
         <a href="/account">내 정보</a>
+        <a href="/account/bookmarks">내 북마크</a>
         {auth.kakao.connected && <a href="/api/auth/kakao/login?prompt=login">다른 카카오 계정으로 로그인</a>}
         <button type="button" onClick={signOut} disabled={busy}>{busy ? "로그아웃 중…" : "로그아웃"}</button>
       </div>

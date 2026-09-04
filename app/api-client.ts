@@ -142,6 +142,14 @@ export async function listPublishedPosts(params: { category?: string; query?: st
   return (await listPublishedPostPage(params)).items;
 }
 
+export async function listMyBookmarks(params: { page?: number; pageSize?: number } = {}): Promise<PostListPage> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  const data = await apiFetch<{ items: ApiPost[]; page: number; has_more: boolean }>(`/api/me/bookmarks${query.size ? `?${query}` : ""}`);
+  return { items: data.items.map(toPublicPost), page: data.page, hasMore: data.has_more };
+}
+
 export async function getPublishedPost(slug: string) { return toPublicPost(await apiFetch<ApiPost>(`/api/posts/${encodeURIComponent(slug)}`)); }
 export async function login(username: string, password: string) { return apiFetch<AuthState>("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }); }
 export async function unlinkKakao(csrf: string) { return apiFetch<void>("/api/auth/kakao/link", { method: "DELETE", headers: { "X-CSRF-Token": csrf } }); }
