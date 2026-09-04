@@ -1,8 +1,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0012_add_view_count"
-down_revision = "0011_add_content_density"
+revision = "0013_add_view_count"
+down_revision = "0012_add_post_listing_indexes"
 branch_labels = None
 depends_on = None
 
