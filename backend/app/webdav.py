@@ -161,6 +161,7 @@ class WebDAVStorage(StorageBase):
         tls_context = ssl.create_default_context()
         tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
         tls_context.maximum_version = ssl.TLSVersion.TLSv1_2
+        tls_context.set_ciphers("AES256-GCM-SHA384")
         if not self.settings.webdav_verify_tls:
             tls_context.check_hostname = False
             tls_context.verify_mode = ssl.CERT_NONE
