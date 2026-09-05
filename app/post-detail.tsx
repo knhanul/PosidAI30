@@ -144,7 +144,7 @@ export default function PostDetail({ slug, fallback }: { slug: string; fallback?
           <h1>{post.title}</h1><p>{post.summary}</p>
           <div className="article-meta"><span>{post.author}</span><i /><span>{post.date}</span><i /><span>읽는 시간 {post.readTime}</span></div>
           {post.ownedByCurrentUser && post.id && <Link className="article-edit-link" href={`/write?edit=${post.id}`}>내 글 수정</Link>}
-          <div className="topic-row article-topics">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div>
+          <div className="topic-row article-topics">{post.topic.map((topic) => <Link key={topic} href={`/?q=${encodeURIComponent(`#${topic}`)}`}>#{topic}</Link>)}</div>
         </div></div>
 
         <article className={`article-body ${post.contentDensity === "compact" ? "density-compact" : "density-normal"}`}>

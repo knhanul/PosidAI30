@@ -59,8 +59,14 @@ class PostInput(BaseModel):
     def clean_topics(cls, values: list[str]) -> list[str]:
         output: list[str] = []
         for value in values:
-            cleaned = value.strip().lstrip("#")[:40]
-            if cleaned and cleaned not in output:
-                output.append(cleaned)
+            cleaned = value.strip().lstrip("#").strip()
+            if not cleaned:
+                continue
+            segments = [segment.strip()[:40] for segment in cleaned.split("/") if segment.strip()]
+            if not segments:
+                continue
+            normalized = "/".join(segments)[:120]
+            if normalized and normalized not in output:
+                output.append(normalized)
         return output
 

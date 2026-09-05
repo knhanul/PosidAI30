@@ -13,6 +13,15 @@ const labels: Record<string, string> = { all: "전체" };
 
 function readingTime(post: Post) { return post.readTime; }
 
+function matchesHashtag(topics: string[], term: string): boolean {
+  const tag = term.replace(/^#/, "").trim().toLowerCase();
+  if (!tag) return true;
+  return topics.some((topic) => {
+    const normalized = topic.toLowerCase();
+    return normalized === tag || normalized.startsWith(tag + "/");
+  });
+}
+
 function Thumb({ post, compact = false }: { post: Post; compact?: boolean }) {
   const category = categories[post.category];
   const icon = post.category === "news" ? "news" : post.category === "learn" ? "book" : post.category === "use" ? "bolt" : "cube";
@@ -33,6 +42,12 @@ export default function ContentHub() {
 
   useEffect(() => { listPublishedPostPage({ homeOnly: true, pageSize: 100 }).then((data) => setLivePosts(data.items)).catch(() => setLivePosts([])).finally(() => setLoading(false)); }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialQuery = params.get("q");
+    if (initialQuery) setQuery(initialQuery);
+  }, []);
+
   const homePosts = useMemo(() => {
     const unique = new Map<string, Post>();
     livePosts.filter((post) => post.id && post.showOnHome !== false).forEach((post) => unique.set(post.id!, post));
@@ -40,7 +55,13 @@ export default function ContentHub() {
   }, [livePosts]);
   const featured = homePosts.find((post) => post.featured) ?? homePosts[0];
   const used = new Set([featured?.id]);
-  const filteredLatest = homePosts.filter((post) => (active === "all" || post.category === active) && (!query.trim() || [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(query.trim().toLowerCase())));
+  const filteredLatest = homePosts.filter((post) => {
+    if (active !== "all" && post.category !== active) return false;
+    const term = query.trim();
+    if (!term) return true;
+    if (term.startsWith("#")) return matchesHashtag(post.topic, term);
+    return [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(term.toLowerCase());
+  });
   const services = homePosts.filter((post) => post.category === "together" && !used.has(post.id));
 
   return <div className="site-shell">

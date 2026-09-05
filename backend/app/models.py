@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timezone
 
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -81,8 +81,8 @@ class Post(Base):
     content_format: Mapped[str] = mapped_column(String(20), default="markdown", nullable=False)
     content_density: Mapped[str] = mapped_column(String(20), default="normal", server_default="normal", nullable=False)
     view_count: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)
-    topics: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    key_points: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    topics: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    key_points: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     show_on_home: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Respo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import Text, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, defer, selectinload
 
@@ -380,8 +380,18 @@ def public_posts(
             raise HTTPException(status_code=400, detail="지원하지 않는 카테고리입니다.")
         statement = statement.where(Post.category == category)
     if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        statement = statement.where(or_(Post.title.ilike(pattern), Post.summary.ilike(pattern), Post.body_markdown.ilike(pattern)))
+        term = q.strip()
+        if term.startswith("#"):
+            tag = term.lstrip("#").strip()
+            if tag:
+                escaped = tag.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                statement = statement.where(or_(
+                    Post.topics.cast(Text).ilike(f'%"{escaped}"%', escape="\\"),
+                    Post.topics.cast(Text).ilike(f'%"{escaped}/%', escape="\\"),
+                ))
+        else:
+            pattern = f"%{term}%"
+            statement = statement.where(or_(Post.title.ilike(pattern), Post.summary.ilike(pattern), Post.body_markdown.ilike(pattern)))
     statement = statement.order_by(Post.published_at.desc().nullslast(), Post.created_at.desc()).offset((page - 1) * page_size).limit(page_size + 1)
     posts = db.scalars(statement).all()
     has_more = len(posts) > page_size
