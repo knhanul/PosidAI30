@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { categories, type CategorySlug } from "./content";
 import UserMenu from "./user-menu";
 
-const navItems: CategorySlug[] = ["news", "learn", "use", "together"];
+const navItems = [
+  { label: "AI 소식", href: "/category/news" },
+  { label: "배워보기", href: "/category/learn" },
+  { label: "써보기", href: "/category/use" },
+  { label: "짧게보기", href: "/shorts" },
+  { label: "함께 만든 AI", href: "/category/together", className: "nav-together" },
+];
 
 export default function SiteHeader() {
   return (
@@ -19,11 +24,7 @@ export default function SiteHeader() {
           </span>
         </Link>
         <nav className="post-nav" aria-label="주요 메뉴">
-          {navItems.map((slug) => (
-            <Link key={slug} href={`/category/${slug}`} className={slug === "together" ? "nav-together" : undefined}>
-              {categories[slug].label}
-            </Link>
-          ))}
+          {navItems.map((item) => <Link key={item.href} href={item.href} className={item.className}>{item.label}</Link>)}
         </nav>
         <UserMenu />
       </div>

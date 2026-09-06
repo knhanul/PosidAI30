@@ -1,4 +1,4 @@
-import type { CategorySlug, ContentBlock, Post } from "./content";
+import type { ContentBlock, Post, PostCategorySlug, ShortCategory } from "./content";
 
 export type ApiAttachment = {
   id: string;
@@ -11,7 +11,9 @@ export type ApiAttachment = {
 export type ApiPost = {
   id: string;
   slug: string;
-  category: CategorySlug;
+  category: PostCategorySlug;
+  short_category: ShortCategory | null;
+  external_url: string | null;
   title: string;
   summary: string;
   body_markdown?: string;
@@ -42,7 +44,9 @@ export type AdminUser = { id: number; username: string; display_name: string; di
 export type AuthState = { user: AdminUser; csrf_token: string; requires_display_name: boolean; suggested_display_name: string | null; kakao: { connected: boolean; nickname: string | null; connected_at: string | null } };
 
 export type PostPayload = {
-  category: CategorySlug;
+  category: PostCategorySlug;
+  short_category: ShortCategory | null;
+  external_url: string | null;
   title: string;
   summary: string;
   body_markdown: string;
@@ -57,6 +61,17 @@ export type PostPayload = {
   service_audience: string | null;
   service_url: string | null;
 };
+
+export function shortSummary(body: string) { return body.replace(/\s+/g, " ").trim().slice(0, 400); }
+
+export function buildShortPostPayload(values: { title: string; body: string; shortCategory: ShortCategory; externalUrl?: string | null; topics: string[]; showOnHome: boolean }): PostPayload {
+  return {
+    category: "short", short_category: values.shortCategory, external_url: values.externalUrl?.trim() || null,
+    title: values.title, summary: shortSummary(values.body), body_markdown: values.body, content_format: "markdown", content_density: "compact",
+    topics: values.topics, key_points: [], is_featured: false, show_on_home: values.showOnHome, thumbnail_type: "preset",
+    service_status: null, service_audience: null, service_url: null,
+  };
+}
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, { ...init, credentials: "include", headers: { Accept: "application/json", ...init.headers } });
@@ -116,7 +131,7 @@ export function toPublicPost(post: ApiPost): Post {
   const age = Date.now() - new Date(publishedDate).getTime();
   const body = post.body_markdown ?? "";
   return {
-    id: post.id, slug: post.slug, category: post.category, title: post.title, summary: post.summary,
+    id: post.id, slug: post.slug, category: post.category, shortCategory: post.short_category, externalUrl: post.external_url, title: post.title, summary: post.summary,
     topic: post.topics, keyPoints: post.key_points, date: new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(publishedDate)).replace(/\. /g, ".").replace(/\.$/, ""),
     readTime: `${Math.max(1, Math.ceil(body.replace(/<[^>]*>/g, " ").length / 700))}분`, author: post.author_name,
     featured: post.is_featured, new: age >= 0 && age <= 7 * 24 * 60 * 60 * 1000, status: post.status, showOnHome: post.show_on_home, ownedByCurrentUser: post.owned_by_current_user,
@@ -128,9 +143,10 @@ export function toPublicPost(post: ApiPost): Post {
 }
 
 export type PostListPage = { items: Post[]; page: number; hasMore: boolean };
-export async function listPublishedPostPage(params: { category?: string; query?: string; homeOnly?: boolean; page?: number; pageSize?: number } = {}): Promise<PostListPage> {
+export async function listPublishedPostPage(params: { category?: PostCategorySlug; shortCategory?: ShortCategory; query?: string; homeOnly?: boolean; page?: number; pageSize?: number } = {}): Promise<PostListPage> {
   const query = new URLSearchParams();
   if (params.category) query.set("category", params.category);
+  if (params.shortCategory) query.set("short_category", params.shortCategory);
   if (params.query) query.set("q", params.query);
   if (params.homeOnly) query.set("home", "true");
   if (params.page) query.set("page", String(params.page));
@@ -138,7 +154,7 @@ export async function listPublishedPostPage(params: { category?: string; query?:
   const data = await apiFetch<{ items: ApiPost[]; page: number; has_more: boolean }>(`/api/posts${query.size ? `?${query}` : ""}`);
   return { items: data.items.map(toPublicPost), page: data.page, hasMore: data.has_more };
 }
-export async function listPublishedPosts(params: { category?: string; query?: string; homeOnly?: boolean } = {}) {
+export async function listPublishedPosts(params: { category?: PostCategorySlug; shortCategory?: ShortCategory; query?: string; homeOnly?: boolean } = {}) {
   return (await listPublishedPostPage(params)).items;
 }
 

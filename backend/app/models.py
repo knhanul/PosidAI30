@@ -93,6 +93,8 @@ class Post(Base):
     service_status: Mapped[str | None] = mapped_column(String(30))
     service_audience: Mapped[str | None] = mapped_column(String(300))
     service_url: Mapped[str | None] = mapped_column(Text)
+    short_category: Mapped[str | None] = mapped_column(String(20))
+    external_url: Mapped[str | None] = mapped_column(Text)
     author_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

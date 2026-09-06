@@ -161,6 +161,52 @@ docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T 
 
 정합성 점검은 DB의 활성 파일 경로와 WebDAV 파일 존재 여부를 비교합니다. 누락 경로는 `ai_file_events`의 `operation`, `status`, `source_path`, `destination_path`, `detail`과 함께 확인합니다. 운영 WebDAV 검증은 기존 Repository와 분리된 `together-ai` namespace에서만 수행합니다.
 
+### 3.7 짧게보기(Short) 기능 Migration
+
+짧게보기 기능은 `0015_add_short_post_fields` migration으로 `posts` 테이블에 nullable column 2개를 추가합니다.
+
+```text
+posts.short_category  VARCHAR(20) NULL  -- tip, discovery, use_case, memo, link
+posts.external_url    TEXT NULL         -- http:// 또는 https:// 만 허용
+```
+
+기존 article 데이터에는 영향을 주지 않습니다. 두 column 모두 nullable이므로 이전 Application에서도 정상 동작합니다.
+
+#### Migration 적용
+
+```bash
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend alembic current
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend alembic upgrade head
+```
+
+#### Application Rollback (DB 0015 유지)
+
+이전 Application image로 되돌리는 경우, 0015의 nullable column은 이전 Application이 무시합니다. 별도 DB downgrade 없이 Application image만 교체하면 됩니다.
+
+```bash
+# 이전 image로 교체 후 재시작
+docker compose --env-file .env -f deployment/docker-compose.example.yml up -d --build
+```
+
+#### DB Rollback (0015 → 0014)
+
+**주의**: Short 게시물이 이미 생성된 경우 downgrade하면 `short_category`와 `external_url` 데이터가 손실됩니다. Short 게시물 자체는 `posts` 테이블에 그대로 남지만, 분류와 외부 링크 정보가 사라집니다.
+
+```bash
+# 1. Short 데이터 존재 여부 확인
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T db \
+  psql -U posid_ai30 posid_ai30 -c "SELECT count(*) FROM posts WHERE category='short';"
+
+# 2. Short 데이터가 있는 경우, downgrade 전 백업 필수
+#    (이미 4절의 백업 절차로 백업했어야 함)
+
+# 3. downgrade 실행 (Short 데이터 손실 주의)
+docker compose --env-file .env -f deployment/docker-compose.example.yml exec -T backend \
+  alembic downgrade 0014_topics_jsonb
+```
+
+Short 데이터가 0건인 경우에만 안전하게 downgrade할 수 있습니다.
+
 ## 4. 서버 배포 (운영)
 
 ### 개발 PC

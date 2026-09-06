@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { categories, type CategorySlug, type Post } from "./content";
+import { categories, isArticleCategory, shortCategoryLabels, type CategorySlug, type Post } from "./content";
 import { listPublishedPostPage } from "./api-client";
+import ShortViewSection from "./short-view-section";
 import SiteHeader from "./site-header";
 import SiteIcon from "./site-icon";
 
@@ -12,15 +13,6 @@ const nav: Array<"all" | CategorySlug> = ["all", ...categoryNav];
 const labels: Record<string, string> = { all: "전체" };
 
 function readingTime(post: Post) { return post.readTime; }
-
-function matchesHashtag(topics: string[], term: string): boolean {
-  const tag = term.replace(/^#/, "").trim().toLowerCase();
-  if (!tag) return true;
-  return topics.some((topic) => {
-    const normalized = topic.toLowerCase();
-    return normalized === tag || normalized.startsWith(tag + "/");
-  });
-}
 
 function Thumb({ post, compact = false }: { post: Post; compact?: boolean }) {
   const category = categories[post.category];
@@ -33,6 +25,12 @@ function Thumb({ post, compact = false }: { post: Post; compact?: boolean }) {
 
 function Meta({ post }: { post: Post }) { return <div className="story-meta"><span>{categories[post.category].label}</span><span>{post.date}</span><span>{readingTime(post)}</span></div>; }
 
+function mergePosts(current: Post[], incoming: Post[]) {
+  const merged = new Map(current.map((post) => [post.id ?? post.slug, post]));
+  incoming.forEach((post) => merged.set(post.id ?? post.slug, post));
+  return [...merged.values()];
+}
+
 export default function ContentHub() {
   const [livePosts, setLivePosts] = useState<Post[]>([]);
   const [query, setQuery] = useState("");
@@ -40,40 +38,137 @@ export default function ContentHub() {
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(8);
 
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Post[]>([]);
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchRetryKey, setSearchRetryKey] = useState(0);
+
   useEffect(() => { listPublishedPostPage({ homeOnly: true, pageSize: 100 }).then((data) => setLivePosts(data.items)).catch(() => setLivePosts([])).finally(() => setLoading(false)); }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initialQuery = params.get("q");
-    if (initialQuery) setQuery(initialQuery);
+    const initialQuery = params.get("q")?.trim() ?? "";
+    if (initialQuery) { setSearchInput(initialQuery); setSearchQuery(initialQuery); }
   }, []);
 
+  useEffect(() => {
+    if (!searchQuery) { setSearchResults([]); setSearchError(""); setSearchHasMore(false); return; }
+    let activeReq = true;
+    setSearchLoading(true); setSearchError(""); setSearchResults([]); setSearchPage(1); setSearchHasMore(false);
+    listPublishedPostPage({ query: searchQuery, page: 1, pageSize: 20 })
+      .then((data) => { if (activeReq) { setSearchResults(data.items); setSearchPage(data.page); setSearchHasMore(data.hasMore); } })
+      .catch((reason) => { if (activeReq) setSearchError(reason instanceof Error ? reason.message : "검색을 수행하지 못했습니다."); })
+      .finally(() => { if (activeReq) setSearchLoading(false); });
+    return () => { activeReq = false; };
+  }, [searchQuery, searchRetryKey]);
+
+  async function loadMoreSearch() {
+    if (searchLoadingMore || !searchHasMore) return;
+    setSearchLoadingMore(true); setSearchError("");
+    try {
+      const data = await listPublishedPostPage({ query: searchQuery, page: searchPage + 1, pageSize: 20 });
+      setSearchResults((current) => mergePosts(current, data.items)); setSearchPage(data.page); setSearchHasMore(data.hasMore);
+    } catch (reason) { setSearchError(reason instanceof Error ? reason.message : "다음 검색 결과를 불러오지 못했습니다."); }
+    finally { setSearchLoadingMore(false); }
+  }
+
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    const term = searchInput.trim();
+    setSearchQuery(term);
+    if (term) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("q", term);
+      window.history.replaceState(null, "", url.toString());
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("q");
+      window.history.replaceState(null, "", url.toString());
+    }
+  }
+
+  function clearSearch() {
+    setSearchInput(""); setSearchQuery("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    window.history.replaceState(null, "", url.toString());
+  }
+
   const homePosts = useMemo(() => {
-    const unique = new Map<string, Post>();
-    livePosts.filter((post) => post.id && post.showOnHome !== false).forEach((post) => unique.set(post.id!, post));
+    const unique = new Map<string, Post & { category: CategorySlug }>();
+    livePosts.filter((post): post is Post & { category: CategorySlug } => Boolean(post.id && post.showOnHome !== false && isArticleCategory(post.category))).forEach((post) => unique.set(post.id!, post));
     return [...unique.values()];
   }, [livePosts]);
   const featured = homePosts.find((post) => post.featured) ?? homePosts[0];
   const used = new Set([featured?.id]);
   const filteredLatest = homePosts.filter((post) => {
     if (active !== "all" && post.category !== active) return false;
-    const term = query.trim();
-    if (!term) return true;
-    if (term.startsWith("#")) return matchesHashtag(post.topic, term);
-    return [post.title, post.summary, post.author, ...post.topic].join(" ").toLowerCase().includes(term.toLowerCase());
+    return true;
   });
   const services = homePosts.filter((post) => post.category === "together" && !used.has(post.id));
+
+  const searching = Boolean(searchQuery);
+
+  const searchArticles = searchResults.filter((post) => isArticleCategory(post.category));
+  const searchShorts = searchResults.filter((post) => post.category === "short");
+
+  function renderSearchResultCard(post: Post) {
+    if (post.category === "short") {
+      return <article className="short-item short-search-item" key={post.id ?? post.slug}>
+        <div className="short-meta"><span className="short-category-badge">{post.shortCategory ? shortCategoryLabels[post.shortCategory] : "짧게보기"}</span><time>{post.date}</time></div>
+        <Link className="short-item-title" href={`/posts/${post.slug}`}><h3>{post.title}</h3></Link>
+        <p className="short-body">{post.bodyMarkdown || post.summary}</p>
+        {!!post.topic.length && <div className="topic-row short-topics">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div>}
+        <div className="short-item-footer"><div className="list-stats"><span className="list-stat">♡ {post.likeCount ?? 0}</span><span className="list-stat">댓글 {post.commentCount ?? 0}</span></div>{post.externalUrl && <a href={post.externalUrl} target="_blank" rel="noopener noreferrer">원문 보기 →</a>}</div>
+      </article>;
+    }
+    return <Link href={`/posts/${post.slug}`} className="latest-card" key={post.id ?? post.slug}>
+      <Thumb post={post} />
+      <div className="latest-copy"><Meta post={post} /><h3>{post.title}</h3><p>{post.summary}</p><div className="topic-row">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div><div className="list-stats"><span className="list-stat">♥ {post.likeCount ?? 0}</span><span className="list-stat">💬 {post.commentCount ?? 0}</span></div></div>
+      {post.new && <b className="new-chip">NEW</b>}
+    </Link>;
+  }
 
   return <div className="site-shell">
     <SiteHeader />
     <main>
-      <section className="home-feature section-wrap">
-        {featured ? <div className="feature-content"><div className="feature-copy"><div className="feature-label"><span>{categories[featured.category].label}</span>{featured.new && <b>NEW</b>}</div><h1>{featured.title}</h1><p>{featured.summary}</p>{featured.keyPoints?.length ? <ul className="feature-points">{featured.keyPoints.slice(0, 3).map((point) => <li key={point}>{point}</li>)}</ul> : null}<Meta post={featured} /><Link className="primary-button" href={`/posts/${featured.slug}`}>내용 살펴보기 <SiteIcon name="arrow" size={19} /></Link></div><Link className="feature-image" href={`/posts/${featured.slug}`} aria-label={`${featured.title} 읽기`}><Thumb post={featured} /></Link></div> : <div className="empty-state home-empty"><strong>{loading ? "게시글을 불러오는 중입니다." : "홈에 표시할 게시글이 없습니다."}</strong><p>{loading ? "잠시만 기다려 주세요." : "관리자 화면에서 글을 저장하고 ‘홈에 표시’를 선택해 주세요."}</p></div>}
+      <section className="home-feature section-wrap search-section-wrap">
+        <div className="section-heading stories-heading"><div><span className="section-kicker">SEARCH</span><h2>통합검색</h2></div><form className="search-box" onSubmit={submitSearch}><SiteIcon name="search" size={19} /><label htmlFor="home-search-input" className="sr-only">글 검색</label><input id="home-search-input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="제목·내용 검색, #태그 검색" maxLength={100} /><button type="submit">검색</button>{searching && <button type="button" onClick={clearSearch} className="search-clear-btn">지우기</button>}</form></div>
       </section>
 
-      <section className="stories-section section-wrap" id="stories"><div className="section-heading stories-heading"><div><span className="section-kicker">LATEST POSTS</span><h2>방금 올라온 이야기</h2></div><label className="search-box"><SiteIcon name="search" size={19} /><span className="sr-only">글 검색</span><input value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(8); }} placeholder="제목·요약·토픽으로 찾기" /></label></div><div className="filter-row" role="group" aria-label="카테고리 필터">{nav.map((slug) => <button key={slug} className={active === slug ? "active" : ""} onClick={() => { setActive(slug); setVisibleCount(8); }}>{slug === "all" ? labels.all : categories[slug].label}</button>)}</div>{filteredLatest.length ? <div className="latest-grid">{filteredLatest.slice(0, visibleCount).map((post) => <Link href={`/posts/${post.slug}`} className="latest-card" key={post.id ?? post.slug}><Thumb post={post} /><div className="latest-copy"><Meta post={post} /><h3>{post.title}</h3><p>{post.summary}</p><div className="topic-row">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div><div className="list-stats"><span className="list-stat">♥ {post.likeCount ?? 0}</span><span className="list-stat">💬 {post.commentCount ?? 0}</span></div></div>{post.new && <b className="new-chip">NEW</b>}</Link>)}</div> : loading ? <div className="empty-state"><strong>게시글을 불러오는 중입니다.</strong><p>잠시만 기다려 주세요.</p></div> : <div className="empty-state"><strong>{query ? "검색 결과가 없습니다." : "표시할 게시글이 없습니다."}</strong><p>다른 카테고리를 선택하거나 관리자에게 홈 노출을 요청해 주세요.</p></div>}{filteredLatest.length > visibleCount && <div className="more-link-wrap"><button type="button" className="secondary-button" onClick={() => setVisibleCount((count) => count + 8)}>더보기 <SiteIcon name="arrow" size={17} /></button></div>}</section>
+      {searching ? (
+        <section className="stories-section section-wrap" id="search-results">
+          <div className="search-result-state">
+            <span>‘{searchQuery}’ 검색 결과</span>
+            {!searchLoading && !searchError && <small>{searchResults.length}건{searchHasMore ? "+" : ""}</small>}
+          </div>
+          {searchLoading ? <div className="empty-state"><strong>검색 중입니다.</strong><p>잠시만 기다려 주세요.</p></div>
+          : searchError ? <div className="short-error" role="alert"><span>{searchError}</span><button type="button" onClick={() => setSearchRetryKey((k) => k + 1)}>다시 시도</button></div>
+          : searchResults.length === 0 ? <div className="empty-state"><strong>검색 결과가 없습니다.</strong><p>다른 검색어를 입력해 보세요.</p></div>
+          : <>
+            {searchArticles.length > 0 && <div className="search-group"><h3 className="search-group-title">게시글</h3><div className="latest-grid">{searchArticles.map(renderSearchResultCard)}</div></div>}
+            {searchShorts.length > 0 && <div className="search-group"><h3 className="search-group-title">짧게보기</h3><div className="short-list">{searchShorts.map(renderSearchResultCard)}</div></div>}
+            {searchHasMore && <div className="more-link-wrap"><button type="button" className="secondary-button" onClick={loadMoreSearch} disabled={searchLoadingMore}>{searchLoadingMore ? "불러오는 중…" : "더보기"} <SiteIcon name="arrow" size={17} /></button></div>}
+          </>}
+        </section>
+      ) : (
+        <>
+          <section className="home-feature section-wrap">
+            {featured ? <div className="feature-content"><div className="feature-copy"><div className="feature-label"><span>{categories[featured.category].label}</span>{featured.new && <b>NEW</b>}</div><h1>{featured.title}</h1><p>{featured.summary}</p>{featured.keyPoints?.length ? <ul className="feature-points">{featured.keyPoints.slice(0, 3).map((point) => <li key={point}>{point}</li>)}</ul> : null}<Meta post={featured} /><Link className="primary-button" href={`/posts/${featured.slug}`}>내용 살펴보기 <SiteIcon name="arrow" size={19} /></Link></div><Link className="feature-image" href={`/posts/${featured.slug}`} aria-label={`${featured.title} 읽기`}><Thumb post={featured} /></Link></div> : <div className="empty-state home-empty"><strong>{loading ? "게시글을 불러오는 중입니다." : "홈에 표시할 게시글이 없습니다."}</strong><p>{loading ? "잠시만 기다려 주세요." : "관리자 화면에서 글을 저장하고 ‘홈에 표시’를 선택해 주세요."}</p></div>}
+          </section>
 
-      {services.length > 0 && <section className="service-section"><div className="section-wrap service-inner"><div className="service-intro"><span className="section-kicker light">TOGETHER</span><h2>함께 만든 AI</h2><p>구성원이 직접 만든 서비스의 문제와 활용 방법을 게시글에서 확인하세요.</p></div><div className="service-list">{services.slice(0, 4).map((post) => <article className="service-card" key={post.id ?? post.slug}><Thumb post={post} compact /><div><span>{post.service?.status ?? "함께 만든 서비스"}</span><strong>{post.title}</strong><p>{post.summary}</p><small>만든 사람 또는 팀 · {post.author}</small><div className="service-links">{post.service?.actionHref && post.service.actionHref !== "#service-guide" && <a href={post.service.actionHref} target={post.service.actionHref.startsWith("http") ? "_blank" : undefined} rel="noreferrer">서비스 써보기</a>}<Link href={`/posts/${post.slug}`}>자세히 보기</Link></div></div></article>)}</div></div></section>}
+          <ShortViewSection />
+
+          <section className="stories-section section-wrap" id="stories"><div className="section-heading stories-heading"><div><span className="section-kicker">LATEST POSTS</span><h2>방금 올라온 이야기</h2></div></div><div className="filter-row" role="group" aria-label="카테고리 필터">{nav.map((slug) => <button key={slug} className={active === slug ? "active" : ""} onClick={() => { setActive(slug); setVisibleCount(8); }}>{slug === "all" ? labels.all : categories[slug].label}</button>)}</div>{filteredLatest.length ? <div className="latest-grid">{filteredLatest.slice(0, visibleCount).map((post) => <Link href={`/posts/${post.slug}`} className="latest-card" key={post.id ?? post.slug}><Thumb post={post} /><div className="latest-copy"><Meta post={post} /><h3>{post.title}</h3><p>{post.summary}</p><div className="topic-row">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div><div className="list-stats"><span className="list-stat">♥ {post.likeCount ?? 0}</span><span className="list-stat">💬 {post.commentCount ?? 0}</span></div></div>{post.new && <b className="new-chip">NEW</b>}</Link>)}</div> : loading ? <div className="empty-state"><strong>게시글을 불러오는 중입니다.</strong><p>잠시만 기다려 주세요.</p></div> : <div className="empty-state"><strong>표시할 게시글이 없습니다.</strong><p>다른 카테고리를 선택하거나 관리자에게 홈 노출을 요청해 주세요.</p></div>}{filteredLatest.length > visibleCount && <div className="more-link-wrap"><button type="button" className="secondary-button" onClick={() => setVisibleCount((count) => count + 8)}>더보기 <SiteIcon name="arrow" size={17} /></button></div>}</section>
+
+          {services.length > 0 && <section className="service-section"><div className="section-wrap service-inner"><div className="service-intro"><span className="section-kicker light">TOGETHER</span><h2>함께 만든 AI</h2><p>구성원이 직접 만든 서비스의 문제와 활용 방법을 게시글에서 확인하세요.</p></div><div className="service-list">{services.slice(0, 4).map((post) => <article className="service-card" key={post.id ?? post.slug}><Thumb post={post} compact /><div><span>{post.service?.status ?? "함께 만든 서비스"}</span><strong>{post.title}</strong><p>{post.summary}</p><small>만든 사람 또는 팀 · {post.author}</small><div className="service-links">{post.service?.actionHref && post.service.actionHref !== "#service-guide" && <a href={post.service.actionHref} target={post.service.actionHref.startsWith("http") ? "_blank" : undefined} rel="noreferrer">서비스 써보기</a>}<Link href={`/posts/${post.slug}`}>자세히 보기</Link></div></div></article>)}</div></div></section>}
+        </>
+      )}
     </main>
   </div>;
 }

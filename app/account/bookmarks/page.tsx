@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getMe, listMyBookmarks, type AuthState } from "../../api-client";
-import { categories, type Post } from "../../content";
+import { categories, shortCategoryLabel, type Post } from "../../content";
 import SiteHeader from "../../site-header";
 import SiteIcon from "../../site-icon";
 
@@ -64,12 +64,12 @@ export default function MyBookmarksPage() {
           </div>
           <div className="category-list-grid">
             {items.map((post, index) => {
-              const category = categories[post.category];
+              const category = post.category === "short" ? null : categories[post.category];
               return (
                 <Link href={`/posts/${post.slug}`} className="category-list-card" key={post.slug}>
                   <span className="list-number">{String(index + 1).padStart(2, "0")}</span>
                   <div>
-                    <div className="story-meta"><span>{category.label}</span><span>{post.date}</span></div>
+                    <div className="story-meta"><span>{category?.label ?? shortCategoryLabel(post.shortCategory)}</span><span>{post.date}</span></div>
                     <h2>{post.title}</h2>
                     <p>{post.summary}</p>
                     <div className="topic-row">{post.topic.map((topic) => <span key={topic}>#{topic}</span>)}</div>

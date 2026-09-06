@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import re
 import secrets
 import time
 import uuid
@@ -28,6 +29,8 @@ from .webdav import safe_filename, storage
 
 
 settings = get_settings()
+POST_CATEGORIES = {"news", "learn", "use", "together", "short"}
+SHORT_CATEGORIES = {"tip", "discovery", "use_case", "memo", "link"}
 app = FastAPI(title=settings.app_name, docs_url="/api/docs" if settings.environment != "production" else None, openapi_url="/api/openapi.json" if settings.environment != "production" else None)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(ai_projects_router)
@@ -62,6 +65,7 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
         "body_markdown": item.body_markdown, "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
+        "short_category": item.short_category, "external_url": item.external_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at,
         "published_at": item.published_at, "attachments": [attachment_payload(file) for file in item.attachments],
     }
@@ -70,18 +74,22 @@ def post_payload(item: Post, admin: bool = False, owned_by_current_user: bool = 
     return payload
 
 
-def post_summary_payload(item: Post, owned_by_current_user: bool = False, like_count: int = 0, comment_count: int = 0) -> dict:
+def post_summary_payload(item: Post, owned_by_current_user: bool = False, like_count: int = 0, comment_count: int = 0, include_body: bool = False) -> dict:
     thumbnail_url = None
     if item.thumbnail_type == "webdav" and item.thumbnail_path:
         thumbnail_url = f"/api/posts/{quote(item.slug)}/thumbnail?v={int(item.updated_at.timestamp())}"
-    return {
+    payload = {
         "id": str(item.id), "slug": item.slug, "category": item.category, "title": item.title, "summary": item.summary,
         "content_format": item.content_format, "content_density": item.content_density or "normal", "topics": item.topics or [], "key_points": item.key_points or [], "status": item.status, "owned_by_current_user": owned_by_current_user,
         "is_featured": item.is_featured, "show_on_home": item.show_on_home, "thumbnail_type": item.thumbnail_type, "thumbnail_url": thumbnail_url,
         "service_status": item.service_status, "service_audience": item.service_audience, "service_url": item.service_url,
+        "short_category": item.short_category, "external_url": item.external_url,
         "author_name": item.author.display_name, "created_at": item.created_at, "updated_at": item.updated_at, "published_at": item.published_at,
         "like_count": like_count, "comment_count": comment_count,
     }
+    if include_body:
+        payload["body_markdown"] = item.body_markdown
+    return payload
 
 
 def add_audit(db: Session, user_id: int | None, action: str, target_type: str, target_id: str, detail: dict | None = None) -> None:
@@ -92,27 +100,55 @@ def sanitize_html(value: str) -> str:
     return bleach.clean(value, tags={"p", "br", "h2", "h3", "strong", "em", "u", "s", "ul", "ol", "li", "blockquote", "a", "img", "figure", "figcaption", "table", "thead", "tbody", "tr", "th", "td", "pre", "code", "hr"}, attributes={"a": ["href"], "img": ["src", "alt", "width", "height"], "figure": ["class"]}, protocols={"http", "https"}, strip=True)
 
 
+def short_summary(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()[:400]
+
+
 def apply_post_input(item: Post, data: PostInput) -> None:
     was_published = item.status == "published"
     if data.slug is not None:
         item.slug = data.slug
     item.category = data.category
     item.title = data.title.strip()
+    item.topics = data.topics
+    item.status = "published"
+    item.show_on_home = data.show_on_home
+    if not was_published:
+        item.published_at = utcnow()
+    if data.category == "short":
+        item.summary = short_summary(data.body_markdown)
+        item.body_markdown = data.body_markdown.strip()
+        item.content_format = "markdown"
+        item.content_density = "compact"
+        item.key_points = []
+        item.is_featured = False
+        item.thumbnail_type = "preset"
+        item.thumbnail_path = None
+        item.thumbnail_filename = None
+        item.thumbnail_content_type = None
+        item.service_status = None
+        item.service_audience = None
+        item.service_url = None
+        item.short_category = data.short_category
+        item.external_url = str(data.external_url) if data.external_url else None
+        return
     item.summary = data.summary.strip()
     item.body_markdown = sanitize_html(data.body_markdown.strip()) if data.content_format == "html" else data.body_markdown.strip()
     item.content_format = data.content_format
     item.content_density = data.content_density
-    item.topics = data.topics
     item.key_points = [point.strip()[:160] for point in data.key_points if point.strip()][:3]
-    item.status = "published"
     item.is_featured = data.is_featured and data.show_on_home
-    item.show_on_home = data.show_on_home
-    if not was_published:
-        item.published_at = utcnow()
     item.thumbnail_type = data.thumbnail_type
     item.service_status = data.service_status.strip() if data.service_status else None
     item.service_audience = data.service_audience.strip() if data.service_audience else None
     item.service_url = str(data.service_url) if data.service_url else None
+    item.short_category = None
+    item.external_url = None
+
+
+def ensure_post_type_unchanged(item: Post, data: PostInput) -> None:
+    if (item.category == "short") != (data.category == "short"):
+        raise HTTPException(status_code=400, detail="일반 게시물과 짧게보기 간 유형은 변경할 수 없습니다.")
 
 
 def get_active_post(db: Session, post_id: uuid.UUID) -> Post:
@@ -369,16 +405,29 @@ def revoke_user_sessions(user_id: int, _: AdminSession = Depends(require_admin_c
 
 @app.get("/api/posts")
 def public_posts(
-    category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
+    category: str | None = Query(default=None), short_category: str | None = Query(default=None), q: str | None = Query(default=None, max_length=100),
     home: bool = Query(default=False), page: int = Query(default=1, ge=1), page_size: int = Query(default=24, ge=1, le=100), db: Session = Depends(get_db),
 ) -> dict:
-    statement = select(Post).options(selectinload(Post.author), defer(Post.body_markdown)).where(Post.status == "published", Post.deleted_at.is_(None))
+    if category and category not in POST_CATEGORIES:
+        raise HTTPException(status_code=400, detail="지원하지 않는 카테고리입니다.")
+    if short_category:
+        if category != "short":
+            raise HTTPException(status_code=400, detail="짧게보기 분류는 category=short일 때만 사용할 수 있습니다.")
+        if short_category not in SHORT_CATEGORIES:
+            raise HTTPException(status_code=400, detail="지원하지 않는 짧게보기 분류입니다.")
+    options = [selectinload(Post.author)]
+    include_body = category == "short"
+    if not include_body:
+        options.append(defer(Post.body_markdown))
+    statement = select(Post).options(*options).where(Post.status == "published", Post.deleted_at.is_(None))
     if home:
         statement = statement.where(Post.show_on_home.is_(True))
+        if category is None:
+            statement = statement.where(Post.category != "short")
     if category:
-        if category not in {"news", "learn", "use", "together"}:
-            raise HTTPException(status_code=400, detail="지원하지 않는 카테고리입니다.")
         statement = statement.where(Post.category == category)
+    if short_category:
+        statement = statement.where(Post.short_category == short_category)
     if q and q.strip():
         term = q.strip()
         if term.startswith("#"):
@@ -401,7 +450,7 @@ def public_posts(
     post_ids = [p.id for p in posts]
     like_counts = dict(db.execute(select(PostLike.post_id, func.count()).where(PostLike.post_id.in_(post_ids)).group_by(PostLike.post_id)).all())
     comment_counts = dict(db.execute(select(Comment.post_id, func.count()).where(Comment.post_id.in_(post_ids)).group_by(Comment.post_id)).all())
-    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0)) for item in posts], "page": page, "has_more": has_more}
+    return {"items": [post_summary_payload(item, like_count=like_counts.get(item.id, 0), comment_count=comment_counts.get(item.id, 0), include_body=include_body) for item in posts], "page": page, "has_more": has_more}
 
 
 @app.get("/api/posts/{slug}")
@@ -624,6 +673,8 @@ def get_user_post_for_edit(post_id: uuid.UUID, session: AdminSession = Depends(r
 @app.post("/api/posts/{post_id}/thumbnail")
 def upload_user_thumbnail(post_id: uuid.UUID, file: UploadFile = File(...), session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
     item = get_active_post(db, post_id)
+    if item.category == "short":
+        raise HTTPException(status_code=400, detail="짧게보기 게시물에는 대표 이미지를 등록할 수 없습니다.")
     if item.author_id != session.user_id and session.user.role != "admin":
         raise HTTPException(status_code=403, detail="이 글의 대표 이미지를 업로드할 권한이 없습니다.")
     if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
@@ -651,9 +702,11 @@ def update_user_post(post_id: uuid.UUID, data: PostInput, session: AdminSession 
     item = get_active_post(db, post_id)
     if item.author_id != session.user_id:
         raise HTTPException(status_code=403, detail="자신이 작성한 글만 수정할 수 있습니다.")
+    ensure_post_type_unchanged(item, data)
     apply_post_input(item, data)
     item.is_featured = False
-    item.show_on_home = True
+    if item.category != "short":
+        item.show_on_home = True
     try:
         add_audit(db, session.user_id, "post.update.user", "post", str(item.id))
         db.commit()
@@ -683,6 +736,7 @@ def create_post(data: PostInput, session: AdminSession = Depends(require_admin_c
 @app.put("/api/admin/posts/{post_id}")
 def update_post(post_id: uuid.UUID, data: PostInput, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> dict:
     item = get_active_post(db, post_id)
+    ensure_post_type_unchanged(item, data)
     apply_post_input(item, data)
     try:
         ensure_featured_unique(db, item)
@@ -706,6 +760,8 @@ def delete_post(post_id: uuid.UUID, _: AdminSession = Depends(require_admin_csrf
 @app.put("/api/admin/posts/{post_id}/featured")
 def set_featured(post_id: uuid.UUID, session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> dict:
     item = get_active_post(db, post_id)
+    if item.category == "short":
+        raise HTTPException(status_code=400, detail="짧게보기 게시물은 대문 글로 지정할 수 없습니다.")
     item.show_on_home = True
     item.is_featured = True
     ensure_featured_unique(db, item)
@@ -733,6 +789,8 @@ def admin_thumbnail(post_id: uuid.UUID, _: AdminSession = Depends(require_admin)
 @app.post("/api/admin/posts/{post_id}/thumbnail")
 def upload_thumbnail(post_id: uuid.UUID, file: UploadFile = File(...), session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> dict:
     item = get_active_post(db, post_id)
+    if item.category == "short":
+        raise HTTPException(status_code=400, detail="짧게보기 게시물에는 대표 이미지를 등록할 수 없습니다.")
     if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="대표 이미지는 JPG, PNG, WebP만 사용할 수 있습니다.")
     assert_upload_size(file, settings.max_thumbnail_mb)
@@ -756,6 +814,8 @@ def upload_thumbnail(post_id: uuid.UUID, file: UploadFile = File(...), session: 
 @app.post("/api/admin/posts/{post_id}/attachments", status_code=201)
 def upload_attachments(post_id: uuid.UUID, files: list[UploadFile] = File(...), session: AdminSession = Depends(require_admin_csrf), db: Session = Depends(get_db)) -> list[dict]:
     item = get_active_post(db, post_id)
+    if item.category == "short":
+        raise HTTPException(status_code=400, detail="짧게보기 게시물에는 첨부파일을 등록할 수 없습니다.")
     if not files or len(files) > 10:
         raise HTTPException(status_code=400, detail="첨부파일은 한 번에 1~10개를 선택해 주세요.")
     sizes = [assert_upload_size(file, settings.max_attachment_mb) for file in files]

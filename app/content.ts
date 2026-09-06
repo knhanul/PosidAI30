@@ -1,4 +1,12 @@
-export type CategorySlug = "news" | "learn" | "use" | "together";
+export type ArticleCategorySlug = "news" | "learn" | "use" | "together";
+export type CategorySlug = ArticleCategorySlug;
+export type PostCategorySlug = ArticleCategorySlug | "short";
+export type ShortCategory = "tip" | "discovery" | "use_case" | "memo" | "link";
+
+export const shortCategoryLabels: Record<ShortCategory, string> = { tip: "TIP", discovery: "발견", use_case: "활용", memo: "메모", link: "링크" };
+
+export function isArticleCategory(category: PostCategorySlug): category is ArticleCategorySlug { return category !== "short"; }
+export function shortCategoryLabel(category?: ShortCategory | null) { return category ? shortCategoryLabels[category] : "짧게보기"; }
 
 export type ContentBlock =
   | { type: "heading"; text: string }
@@ -9,7 +17,9 @@ export type ContentBlock =
 export type Post = {
   id?: string;
   slug: string;
-  category: CategorySlug;
+  category: PostCategorySlug;
+  shortCategory?: ShortCategory | null;
+  externalUrl?: string | null;
   title: string;
   summary: string;
   topic: string[];
@@ -39,7 +49,7 @@ export type Post = {
   body: ContentBlock[];
 };
 
-export const categories: Record<CategorySlug, { label: string; eyebrow: string; description: string; tone: string }> = {
+export const categories: Record<ArticleCategorySlug, { label: string; eyebrow: string; description: string; tone: string }> = {
   news: { label: "AI 소식", eyebrow: "변화를 쉽게", description: "업무와 연결되는 AI 흐름만 골라 짧고 쉽게 전합니다.", tone: "orange" },
   learn: { label: "배워보기", eyebrow: "기초부터 차근차근", description: "부담 없이 읽고 바로 따라 하는 짧은 AI 안내서입니다.", tone: "yellow" },
   use: { label: "써보기", eyebrow: "오늘 업무에 바로", description: "프롬프트와 실제 활용 순서를 업무 장면별로 정리합니다.", tone: "red" },
