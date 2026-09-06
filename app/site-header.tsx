@@ -11,9 +11,11 @@ const navItems = [
   { label: "함께 만든 AI", href: "/category/together", className: "nav-together" },
 ];
 
-export default function SiteHeader() {
+type Props = { variant?: "home" | "default" };
+
+export default function SiteHeader({ variant = "default" }: Props) {
   return (
-    <header className="site-header">
+    <header className={`site-header${variant === "home" ? " site-header-home" : ""}`}>
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="Posid AI담당관3.0 홈">
           <span className="brand-logo-wrap"><img src="/brand/posid-ci-02.jpg" alt="PoSID" /></span>
