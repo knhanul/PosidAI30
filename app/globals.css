@@ -397,6 +397,15 @@ img { max-width: 100%; display: block; }
 .article-rich-body.density-normal p { margin-top: 0; margin-bottom: .5em; }
 .article-rich-body.density-compact, .article-body.density-compact { line-height: 1.5; }
 .article-rich-body.density-compact p, .article-body.density-compact > p { margin-top: 0; margin-bottom: .18em; }
+.article-rich-body video, .rich-editor-content video { display: block; max-width: 100%; height: auto; margin: 18px 0; border-radius: 12px; background: #000; }
+.article-rich-body .video-iframe-wrap, .rich-editor-content .video-iframe-wrap { position: relative; width: 100%; margin: 18px 0; padding-bottom: 56.25%; border-radius: 12px; overflow: hidden; background: #000; }
+.article-rich-body .video-iframe-wrap iframe, .rich-editor-content .video-iframe-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.article-rich-body iframe, .rich-editor-content iframe { display: block; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; height: auto; margin: 18px 0; border: 0; border-radius: 12px; }
+.video-button-wrap { position: relative; display: inline-block; }
+.video-menu { position: absolute; top: 100%; left: 0; z-index: 20; margin-top: 4px; padding: 6px; min-width: 200px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
+.video-menu button { display: block; width: 100%; margin: 2px 0; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.video-menu button:hover { background: #f4f2ef; }
+.video-menu button:disabled { color: var(--gray); cursor: not-allowed; }
 
 @media (max-width: 1020px) {
   .desktop-nav { display: none; }.header-search-link { margin-left: auto; }.write-page { padding: 22px 16px 55px; }.write-layout { grid-template-columns: 1fr; }.write-preview { position: static; order: 2; }.write-form { padding: 22px 17px; }.write-head { align-items: stretch; flex-direction: column; }.write-head button { align-self: stretch; }.rich-editor-toolbar button:nth-child(n+9) { display: none; }.rich-editor-content { min-height: 300px; padding: 14px; }.feature-content { grid-template-columns: 1fr 36%; gap: 24px; padding: 28px; }.latest-grid { grid-template-columns: 1fr; }

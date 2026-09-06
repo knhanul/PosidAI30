@@ -52,6 +52,7 @@ Copy-Item .env.sample .env
 | `WEBDAV_TIMEOUT_SECONDS` | WebDAV 타임아웃 | `60` |
 | `MAX_THUMBNAIL_MB` | 대표 이미지 최대 크기 | `10` |
 | `MAX_ATTACHMENT_MB` | 게시글 첨부파일 최대 크기 | `100` |
+| `MAX_INLINE_VIDEO_MB` | 본문 동영상 최대 크기 | `200` |
 | `MAX_PROJECT_FILE_MB` | 함께 만든 AI 프로젝트 파일 최대 크기 | `2048` |
 
 > **주의**:

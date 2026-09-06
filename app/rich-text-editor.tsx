@@ -12,10 +12,19 @@ import TableHeader from "@tiptap/extension-table-header";
 import { useEffect, useRef, useState } from "react";
 import type { EditorView } from "@tiptap/pm/view";
 import { TextSelection } from "@tiptap/pm/state";
+import { VideoBlock, IframeBlock, toEmbedUrl } from "./video-extensions";
 
 export type ImageUploader = (file: File) => Promise<string>;
+export type VideoUploader = (file: File) => Promise<string>;
 
-type Props = { value: string; onChange: (value: string) => void; onUpload?: ImageUploader; onUploadingChange?: (uploading: boolean) => void; disabled?: boolean };
+type Props = {
+  value: string;
+  onChange: (value: string) => void;
+  onUpload?: ImageUploader;
+  onUploadVideo?: VideoUploader;
+  onUploadingChange?: (uploading: boolean) => void;
+  disabled?: boolean;
+};
 
 function getImageFromClipboard(data: DataTransfer | null): File | null {
   if (!data) return null;
@@ -29,12 +38,15 @@ function getImageFromClipboard(data: DataTransfer | null): File | null {
   return files.find((f) => f.type.startsWith("image/")) ?? null;
 }
 
-export default function RichTextEditor({ value, onChange, onUpload, onUploadingChange, disabled }: Props) {
+export default function RichTextEditor({ value, onChange, onUpload, onUploadVideo, onUploadingChange, disabled }: Props) {
   const onUploadRef = useRef(onUpload);
+  const onUploadVideoRef = useRef(onUploadVideo);
   const lastPasteRef = useRef("");
   useEffect(() => { onUploadRef.current = onUpload; }, [onUpload]);
+  useEffect(() => { onUploadVideoRef.current = onUploadVideo; }, [onUploadVideo]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [videoMenuOpen, setVideoMenuOpen] = useState(false);
 
   useEffect(() => { onUploadingChange?.(uploading); }, [onUploadingChange, uploading]);
 
@@ -55,8 +67,22 @@ export default function RichTextEditor({ value, onChange, onUpload, onUploadingC
     }
   };
 
+  const insertVideoFile = async (view: EditorView, file: File, uploader: VideoUploader) => {
+    setUploading(true);
+    setUploadError("");
+    try {
+      const src = await uploader(file);
+      view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.videoBlock.create({ src, controls: true })));
+      view.focus();
+    } catch {
+      setUploadError("동영상을 업로드하지 못했습니다. 파일 크기나 형식을 확인해 주세요.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [2, 3] } }), Underline, Link.configure({ openOnClick: false, protocols: ["http", "https"] }), Image.configure({ inline: false, allowBase64: false }), Table.configure({ resizable: false }), TableRow, TableHeader, TableCell],
+    extensions: [StarterKit.configure({ heading: { levels: [2, 3] } }), Underline, Link.configure({ openOnClick: false, protocols: ["http", "https"] }), Image.configure({ inline: false, allowBase64: false }), VideoBlock, IframeBlock, Table.configure({ resizable: false }), TableRow, TableHeader, TableCell],
     content: value || "<p></p>",
     editable: !disabled,
     immediatelyRender: false,
@@ -104,9 +130,34 @@ export default function RichTextEditor({ value, onChange, onUpload, onUploadingC
   const addLink = () => { const href = window.prompt("링크 주소를 입력하세요."); if (href) editor.chain().focus().setLink({ href }).run(); };
   const addImage = () => { const input = document.createElement("input"); input.type = "file"; input.accept = "image/png,image/jpeg,image/webp"; input.capture = "environment"; input.onchange = () => { const file = input.files?.[0]; const uploader = onUploadRef.current; if (file && uploader) void insertImageFiles(editor.view, [file], uploader); }; input.click(); };
 
+  const addVideoFile = () => {
+    setVideoMenuOpen(false);
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/mp4,video/webm";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      const uploader = onUploadVideoRef.current;
+      if (file && uploader) void insertVideoFile(editor.view, file, uploader);
+    };
+    input.click();
+  };
+
+  const addVideoEmbed = () => {
+    setVideoMenuOpen(false);
+    const url = window.prompt("YouTube 또는 Vimeo 동영상 주소를 입력하세요.");
+    if (!url) return;
+    const embedUrl = toEmbedUrl(url);
+    if (!embedUrl) {
+      setUploadError("지원하는 동영상 주소가 아닙니다. YouTube 또는 Vimeo 링크를 입력해 주세요.");
+      return;
+    }
+    editor.chain().focus().setIframeBlock(embedUrl).run();
+  };
+
   return <div className="rich-editor" data-disabled={disabled || undefined}>
     <div className="rich-editor-toolbar" role="toolbar" aria-label="본문 서식">
-      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} aria-label="굵게">굵게</button><button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} aria-label="기울임">기울임</button><button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} aria-label="밑줄">밑줄</button><button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>제목 2</button><button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>제목 3</button><button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()}>목록</button><button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()}>번호</button><button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()}>인용</button><button type="button" onClick={addLink}>링크</button><button type="button" onClick={addImage} disabled={!onUpload || uploading}>사진</button><button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}>구분선</button><button type="button" onClick={() => editor.chain().focus().toggleCodeBlock().run()}>코드</button><button type="button" onClick={() => editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run()}>표</button><button type="button" onClick={() => editor.chain().focus().undo().run()}>실행 취소</button><button type="button" onClick={() => editor.chain().focus().redo().run()}>다시 실행</button>
-    </div><EditorContent editor={editor} />{uploading && <div className="rich-editor-uploading" role="status" aria-live="polite">이미지를 업로드하는 중…</div>}{uploadError && <div className="rich-editor-upload-error" role="alert">{uploadError}</div>}
+      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} aria-label="굵게">굵게</button><button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} aria-label="기울임">기울임</button><button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} aria-label="밑줄">밑줄</button><button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>제목 2</button><button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>제목 3</button><button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()}>목록</button><button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()}>번호</button><button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()}>인용</button><button type="button" onClick={addLink}>링크</button><button type="button" onClick={addImage} disabled={!onUpload || uploading}>사진</button><div className="video-button-wrap"><button type="button" onClick={() => setVideoMenuOpen((open) => !open)} disabled={uploading} aria-haspopup="menu" aria-expanded={videoMenuOpen}>동영상</button>{videoMenuOpen && <div className="video-menu" role="menu"><button type="button" onClick={addVideoFile} disabled={!onUploadVideo} role="menuitem">파일 업로드</button><button type="button" onClick={addVideoEmbed} role="menuitem">외부 링크 (YouTube/Vimeo)</button></div>}</div><button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}>구분선</button><button type="button" onClick={() => editor.chain().focus().toggleCodeBlock().run()}>코드</button><button type="button" onClick={() => editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run()}>표</button><button type="button" onClick={() => editor.chain().focus().undo().run()}>실행 취소</button><button type="button" onClick={() => editor.chain().focus().redo().run()}>다시 실행</button>
+    </div><EditorContent editor={editor} />{uploading && <div className="rich-editor-uploading" role="status" aria-live="polite">업로드하는 중…</div>}{uploadError && <div className="rich-editor-upload-error" role="alert">{uploadError}</div>}
   </div>;
 }

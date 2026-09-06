@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     webdav_write_timeout_seconds: float = 3600.0
     max_thumbnail_mb: int = 10
     max_attachment_mb: int = 100
+    max_inline_video_mb: int = 200
     max_project_file_mb: int = 2048
     local_storage_dir: str = "/app/storage"
 

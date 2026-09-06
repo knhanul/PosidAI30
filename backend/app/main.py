@@ -6,9 +6,10 @@ import time
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import bleach
+import html5lib
 import httpx
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
@@ -96,8 +97,64 @@ def add_audit(db: Session, user_id: int | None, action: str, target_type: str, t
     db.add(AuditLog(user_id=user_id, action=action, target_type=target_type, target_id=target_id, detail=detail or {}))
 
 
+VIDEO_EMBED_HOSTS = {
+    "www.youtube.com", "youtube.com", "youtu.be",
+    "www.youtube-nocookie.com", "youtube-nocookie.com",
+    "player.vimeo.com", "vimeo.com",
+}
+
+
+def sanitize_iframe_src(src: str) -> str | None:
+    try:
+        parsed = urlparse(src)
+    except Exception:
+        return None
+    if parsed.scheme not in ("http", "https"):
+        return None
+    host = (parsed.hostname or "").lower()
+    if host not in VIDEO_EMBED_HOSTS:
+        return None
+    return src
+
+
 def sanitize_html(value: str) -> str:
-    return bleach.clean(value, tags={"p", "br", "h2", "h3", "strong", "em", "u", "s", "ul", "ol", "li", "blockquote", "a", "img", "figure", "figcaption", "table", "thead", "tbody", "tr", "th", "td", "pre", "code", "hr"}, attributes={"a": ["href"], "img": ["src", "alt", "width", "height"], "figure": ["class"]}, protocols={"http", "https"}, strip=True)
+    cleaned = bleach.clean(
+        value,
+        tags={"p", "br", "h2", "h3", "strong", "em", "u", "s", "ul", "ol", "li", "blockquote", "a", "img", "figure", "figcaption", "table", "thead", "tbody", "tr", "th", "td", "pre", "code", "hr", "video", "source", "iframe"},
+        attributes={
+            "a": ["href"],
+            "img": ["src", "alt", "width", "height"],
+            "figure": ["class"],
+            "video": ["src", "controls", "width", "height", "preload"],
+            "source": ["src", "type"],
+            "iframe": ["src", "width", "height", "frameborder", "allow", "allowfullscreen"],
+        },
+        protocols={"http", "https"},
+        strip=True,
+    )
+    # Further restrict iframe src to trusted video embed hosts.
+    # Parse with html5lib, remove untrusted iframes, then serialize only the body fragment.
+    from xml.etree import ElementTree as ET
+    tree = html5lib.parse(cleaned, namespaceHTMLElements=False)
+    for iframe in list(tree.findall(".//iframe")):
+        src = iframe.get("src", "")
+        if not sanitize_iframe_src(src):
+            parent = None
+            for candidate in tree.iter():
+                if iframe in list(candidate):
+                    parent = candidate
+                    break
+            if parent is not None:
+                parent.remove(iframe)
+    body = tree.find(".//body")
+    if body is None:
+        return cleaned
+    parts: list[str] = []
+    if body.text:
+        parts.append(body.text)
+    for child in body:
+        parts.append(ET.tostring(child, encoding="unicode", method="html"))
+    return "".join(parts)
 
 
 def short_summary(value: str) -> str:
@@ -618,6 +675,55 @@ def public_inline_image(slug: str, filename: str, db: Session = Depends(get_db))
     safe_name = safe_filename(filename)
     content_type = "image/webp" if safe_name.lower().endswith(".webp") else "image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     return file_response(f"{settings.webdav_root.strip('/')}/posts/{item.id}/inline-images/{safe_name}", content_type)
+
+
+INLINE_VIDEO_TYPES = {"video/mp4", "video/webm"}
+
+
+def inline_video_content_type(filename: str) -> str:
+    lower = filename.lower()
+    if lower.endswith(".webm"):
+        return "video/webm"
+    return "video/mp4"
+
+
+@app.post("/api/inline-videos")
+def upload_new_post_inline_video(file: UploadFile = File(...), session: AdminSession = Depends(require_confirmed_csrf)) -> dict:
+    if file.content_type not in INLINE_VIDEO_TYPES:
+        raise HTTPException(status_code=415, detail="본문 동영상은 MP4, WebM만 사용할 수 있습니다.")
+    assert_upload_size(file, settings.max_inline_video_mb)
+    filename = f"{uuid.uuid4().hex}-{safe_filename(file.filename or 'inline-video')}"
+    storage.upload(["inline-videos", str(session.user_id)], filename, file.file)
+    return {"url": f"/api/inline-videos/{session.user_id}/{quote(filename)}"}
+
+
+@app.get("/api/inline-videos/{user_id}/{filename}")
+def public_new_post_inline_video(user_id: int, filename: str) -> StreamingResponse:
+    safe_name = safe_filename(filename)
+    return file_response(f"{settings.webdav_root.strip('/')}/inline-videos/{user_id}/{safe_name}", inline_video_content_type(safe_name))
+
+
+@app.post("/api/posts/{post_id}/inline-videos")
+def upload_inline_video(post_id: uuid.UUID, file: UploadFile = File(...), session: AdminSession = Depends(require_confirmed_csrf), db: Session = Depends(get_db)) -> dict:
+    item = get_active_post(db, post_id)
+    if item.author_id != session.user_id and session.user.role != "admin":
+        raise HTTPException(status_code=403, detail="이 글의 본문 동영상을 업로드할 권한이 없습니다.")
+    if file.content_type not in INLINE_VIDEO_TYPES:
+        raise HTTPException(status_code=415, detail="본문 동영상은 MP4, WebM만 사용할 수 있습니다.")
+    assert_upload_size(file, settings.max_inline_video_mb)
+    filename = f"{uuid.uuid4().hex}-{safe_filename(file.filename or 'inline-video')}"
+    storage.upload(["posts", str(item.id), "inline-videos"], filename, file.file)
+    db.commit()
+    return {"url": f"/api/posts/{quote(item.slug)}/inline-videos/{quote(filename)}"}
+
+
+@app.get("/api/posts/{slug}/inline-videos/{filename}")
+def public_inline_video(slug: str, filename: str, db: Session = Depends(get_db)) -> StreamingResponse:
+    item = db.scalar(select(Post).where(Post.slug == slug, Post.status == "published", Post.deleted_at.is_(None)))
+    if not item:
+        raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다.")
+    safe_name = safe_filename(filename)
+    return file_response(f"{settings.webdav_root.strip('/')}/posts/{item.id}/inline-videos/{safe_name}", inline_video_content_type(safe_name))
 
 
 @app.get("/api/posts/{slug}/thumbnail")
