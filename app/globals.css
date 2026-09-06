@@ -35,6 +35,8 @@ img { max-width: 100%; display: block; }
 .brand-unit { font-size: 15px; font-weight: 800; letter-spacing: -.03em; color: var(--ink); white-space: nowrap; }
 .brand-name { font-size: 15px; font-weight: 800; letter-spacing: -.03em; color: var(--ink); white-space: nowrap; }
 .brand-name b { color: var(--orange); }
+.site-header:not(.site-header-home) .brand-text { display: none; }
+.site-header:not(.site-header-home) .brand-divider { display: none; }
 .desktop-nav { margin-left: auto; display: flex; align-items: center; gap: 31px; font-size: 15px; font-weight: 700; }
 .desktop-nav a { position: relative; padding: 27px 0 25px; }
 .desktop-nav a::after { content: ""; position: absolute; left: 50%; bottom: 18px; width: 0; height: 2px; background: var(--orange); transition: .2s; }
@@ -418,8 +420,10 @@ img { max-width: 100%; display: block; }
   .brand-name b { color: #a29b95; }
   .post-nav { gap: 18px; font-size: 13px; }
   .post-nav .nav-together { display: none; }
-  .site-header-home .brand-text { display: none; }
-  .site-header-home .brand-divider { display: none; }
+  .site-header-home .brand-text { display: flex; }
+  .site-header-home .brand-divider { display: block; }
+  .site-header-home .brand-unit { font-size: 9px; }
+  .site-header-home .brand-name { font-size: 10px; }
   .mobile-nav { display: flex; justify-content: space-around; width: 100%; gap: 0; padding: 0 16px 13px; font-size: 14px; font-weight: 800; border-bottom: 1px solid var(--line); }.mobile-nav a { white-space: nowrap; flex: 1; text-align: center; padding: 8px 0; }
   .mobile-write-link { color: var(--orange-dark); }
   .hero { grid-template-columns: 1fr; }.hero-main { min-height: 445px; }
@@ -602,8 +606,10 @@ img { max-width: 100%; display: block; }
   .site-header .post-nav { order: 0; width: auto; margin-left: auto; padding: 0; gap: 14px; font-size: 12px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
   .site-header .post-nav::-webkit-scrollbar { display: none; }
   .site-header .post-nav a { flex: 0 0 auto; }
-  .site-header-home .brand-text { display: none; }
-  .site-header-home .brand-divider { display: none; }
+  .site-header-home .brand-text { display: flex; }
+  .site-header-home .brand-divider { display: block; height: 18px; margin: 0 6px; }
+  .site-header-home .brand-unit { font-size: 8px; }
+  .site-header-home .brand-name { font-size: 9px; }
   .site-header-home .post-nav a:nth-child(4), .site-header-home .post-nav a:nth-child(5) { display: none; }
   .short-shell { width: min(100% - 32px, 900px); }
   .short-hero { padding: 48px 0 40px; }
